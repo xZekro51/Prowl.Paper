@@ -23,7 +23,7 @@ internal class Program
         // Initialize the window
         SetConfigFlags(ConfigFlags.ResizableWindow);
         InitWindow(width, height, "Raylib Sample");
-        SetTargetFPS(60);
+        SetTargetFPS(240);
 
         _renderer = new RaylibCanvasRenderer();
         Paper.Initialize(_renderer, width, height);
