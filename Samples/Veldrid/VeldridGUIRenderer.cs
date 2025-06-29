@@ -56,6 +56,10 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     private ResourceLayout? _projectionLayout;
     private ResourceSet? _projectionSet;
 
+    private readonly float _dpiScale;
+
+    public float DPIScale => _dpiScale;
+
     private struct Vertex
     {
         public Vector2 Position;
@@ -227,6 +231,8 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         fsout_Color = color;
     }";
 
+
+
     public VeldridGUIRenderer(int width, int height)
     {
         WindowCreateInfo windowInfo = new WindowCreateInfo()
@@ -238,6 +244,11 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             WindowTitle = "Veldrid - GUI Renderer"
         };
         _window = VeldridStartup.CreateWindow(ref windowInfo);
+
+        // Get DPI scale
+        //Veldrid.SDL.SDL_GetDisplayDPI(_window.DisplayIndex, out float ddpi, out float hdpi, out float vdpi);
+        _dpiScale = Graphics.GetDpiForWindow(_window.Handle) / 96.0f; // 96 is the default DPI
+
 
         GraphicsDeviceOptions options = new GraphicsDeviceOptions
         {
@@ -260,7 +271,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             mipLevels: 1,
             arrayLayers: 1,
             format: PixelFormat.R8_G8_B8_A8_UNorm,
-            TextureUsage.Sampled | TextureUsage.RenderTarget,
+            TextureUsage.Sampled | TextureUsage.Storage,
             TextureType.Texture2D);
 
         var texture = factory.CreateTexture(textureDescription);
@@ -383,7 +394,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             0,
             0,
             0,
-            0,
+            1,
             SamplerBorderColor.TransparentBlack);
         _sampler = factory.CreateSampler(samplerDesc);
 
@@ -401,9 +412,27 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             _brushLayout,
             _brushBuffer));
 
+
+        var blendState = new BlendStateDescription
+        {
+            AttachmentStates = new BlendAttachmentDescription[]
+            {
+                new BlendAttachmentDescription
+                {
+                    BlendEnabled = true,
+                    SourceColorFactor = BlendFactor.One,
+                    DestinationColorFactor = BlendFactor.InverseSourceAlpha,
+                    ColorFunction = BlendFunction.Add,
+                    SourceAlphaFactor = BlendFactor.SourceAlpha,
+                    DestinationAlphaFactor = BlendFactor.Zero,
+                    AlphaFunction = BlendFunction.Add
+                }
+            }
+        };
+
         // Create pipeline
         GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleAlphaBlend,
+            blendState,
             DepthStencilStateDescription.Disabled,
             new RasterizerStateDescription(
                 cullMode: FaceCullMode.Front,
@@ -424,7 +453,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     private void UpdateProjection(float width, float height)
     {
         // Create orthographic projection matrix for 2D rendering
-        var projection = Matrix4x4.CreateOrthographicOffCenter(0, width, height, 0, -1, 1);
+        var projection = Matrix4x4.CreateOrthographicOffCenter(0, width / _dpiScale, height / _dpiScale, 0, -1, 1);
         _graphicsDevice.UpdateBuffer(_projectionBuffer!, 0, projection);
     }
 
@@ -475,7 +504,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             vertices[i] = new Vertex
             {
                 //Position = (new Vector2(v.x, v.y) / new Vector2(_window.Width, _window.Height)) - new Vector2(0.5f,0.5f),
-                Position = new Vector2(v.x, v.y),
+                Position = new Vector2(v.x / _dpiScale, v.y / _dpiScale),
                 TexCoord = new Vector2(v.u, v.v),
                 Color = new RgbaFloat(v.r / 255f, v.g / 255f, v.b / 255f, v.a / 255f)
             };

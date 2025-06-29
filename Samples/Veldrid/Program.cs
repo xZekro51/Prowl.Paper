@@ -39,7 +39,7 @@ namespace VeldridSample
             renderer.DisposeResources();*/
             
              
-            var veldridGUIRenderer = new VeldridGUIRenderer(800, 800);
+            var veldridGUIRenderer = new VeldridGUIRenderer(1080, 850);
             Paper.Initialize(veldridGUIRenderer, veldridGUIRenderer.Window.Width, veldridGUIRenderer.Window.Height);
 
             PaperDemo.Initialize();
@@ -70,7 +70,7 @@ namespace VeldridSample
                 double deltaTime = currentTime - _lastFrameTime;
                 _lastFrameTime = currentTime;
 
-                RenderPaper(font, Paper.DeltaTime);
+                RenderPaper(veldridGUIRenderer, font, deltaTime);
             }
             veldridGUIRenderer.DisposeRenderer();
             
@@ -78,10 +78,10 @@ namespace VeldridSample
 
         }
 
-        public static void RenderPaper(SpriteFontBase font, double deltaTime)
+        public static void RenderPaper(VeldridGUIRenderer renderer, SpriteFontBase font, double deltaTime)
         {
             // Begin the UI frame with deltaTime
-            Paper.BeginFrame(deltaTime);
+            Paper.BeginFrame(deltaTime, new Vector2(renderer.DPIScale,renderer.DPIScale));
 
             PaperDemo.RenderUI();
             // Define your UI
