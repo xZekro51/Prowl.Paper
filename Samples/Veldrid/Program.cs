@@ -62,8 +62,10 @@ namespace VeldridSample
 
             while (veldridGUIRenderer.Window.Exists)
             {
-                veldridGUIRenderer.Window.PumpEvents();
-                
+                var inputSnapshot = veldridGUIRenderer.Window.PumpEvents();
+
+                veldridGUIRenderer.Input.UpdateInput(inputSnapshot);
+
                 double currentTime = _stopwatch.Elapsed.TotalSeconds;
                 double deltaTime = currentTime - _lastFrameTime;
                 _lastFrameTime = currentTime;
@@ -81,7 +83,7 @@ namespace VeldridSample
             // Begin the UI frame with deltaTime
             Paper.BeginFrame(deltaTime);
 
-            //PaperDemo.RenderUI();
+            PaperDemo.RenderUI();
             // Define your UI
 
             // Main content
@@ -91,7 +93,10 @@ namespace VeldridSample
             //Paper.Box("MainContent").Position(0, 0).Size(1).BackgroundColor(System.Drawing.Color.FromArgb(220,220,220));//(System.Drawing.Color.FromArgb(val, val, val));
 
             //Paper.Box("MainContent").BackgroundColor(System.Drawing.Color.FromArgb(220, 220, 220));//(System.Drawing.Color.FromArgb(val, val, val));
-            using (Paper.Column("MainContainer")
+
+
+
+            /*using (Paper.Column("MainContainer")
                 .BackgroundColor(System.Drawing.Color.FromArgb(240, 240, 240))
                 .Enter())
             {
@@ -113,7 +118,7 @@ namespace VeldridSample
                     // Main content
                     Paper.Box("MainContent");
                 }
-            }
+            }*/
 
             // End the UI frame
             Paper.EndFrame();

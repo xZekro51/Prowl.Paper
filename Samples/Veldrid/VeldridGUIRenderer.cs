@@ -26,6 +26,10 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     private readonly Sdl2Window _window;
     public Sdl2Window Window => _window;
 
+    public VeldridGUIInput Input => _input ??= new VeldridGUIInput(_window);
+
+    private VeldridGUIInput _input;
+
     private readonly GraphicsDevice _graphicsDevice;
     public GraphicsDevice GraphicsDevice => _graphicsDevice;
 
@@ -109,19 +113,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         fsin_Color = Color;
     }";
 
-    /*private const string FragmentCode = @"
-    #version 450
-
-    layout(location = 0) in vec2 fsin_TexCoord;
-    layout(location = 1) in vec4 fsin_Color;
-    layout(location = 2) in vec2 fsin_Position;
-
-    layout(location = 0) out vec4 fsout_Color;
-
-    void main()
-    {
-        fsout_Color = fsin_Color;
-    }";*/
 
     private const string FragmentCode = @"
     #version 450
@@ -272,28 +263,29 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             TextureUsage.Sampled | TextureUsage.RenderTarget,
             TextureType.Texture2D);
 
-        return factory.CreateTexture(textureDescription);
+        var texture = factory.CreateTexture(textureDescription);
+        return factory.CreateTextureView(texture);
     }
 
     public Vector2Int GetTextureSize(object texture)
     {
-        if (texture is not Texture tex)
+        if (texture is not TextureView tex)
         {
             throw new ArgumentException("Texture must be of type Veldrid.Texture", nameof(texture));
         }
 
-        return new Vector2Int((int)tex.Width, (int)tex.Height);
+        return new Vector2Int((int)tex.Target.Width, (int)tex.Target.Height);
     }
 
     public void SetTextureData(object texture, Prowl.Vector.IntRect bounds, byte[] data)
     {
-        if (texture is not Texture tex)
+        if (texture is not TextureView textureView)
         {
             throw new ArgumentException("Texture must be of type Veldrid.Texture", nameof(texture));
         }
 
         _graphicsDevice.UpdateTexture(
-            tex,
+            textureView.Target,
             data,
             (uint)(bounds.x),
             (uint)(bounds.y),
@@ -414,12 +406,12 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             BlendStateDescription.SingleAlphaBlend,
             DepthStencilStateDescription.Disabled,
             new RasterizerStateDescription(
-                cullMode: FaceCullMode.Back,
+                cullMode: FaceCullMode.Front,
                 fillMode: PolygonFillMode.Solid,
                 frontFace: FrontFace.Clockwise,
-                depthClipEnabled: false,
+                depthClipEnabled: true,
                 scissorTestEnabled: false),
-            PrimitiveTopology.TriangleStrip,
+            PrimitiveTopology.TriangleList,
             new ShaderSetDescription(
                 new[] { vertexLayout },
                 _shaders),
@@ -536,8 +528,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         {
             // Set texture
             var textureView = drawCall.Texture as TextureView ?? _defaultTextureView;
-
-            Console.WriteLine($"IsTextureDefault: {textureView == _defaultTextureView}");
 
             var resourceSet = factory.CreateResourceSet(new ResourceSetDescription(
                 _textureLayout!,
