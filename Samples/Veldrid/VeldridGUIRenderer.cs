@@ -18,6 +18,7 @@ using Veldrid.StartupUtilities;
 using Vector2 = System.Numerics.Vector2;
 using Vector3 = System.Numerics.Vector3;
 using Vector4 = System.Numerics.Vector4;
+using Matrix4x4 = System.Numerics.Matrix4x4;
 
 namespace VeldridSample;
 internal class VeldridGUIRenderer : ICanvasRenderer
@@ -47,6 +48,10 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     private ResourceSet? _textureSet;
     private Sampler? _sampler;
 
+    private DeviceBuffer? _projectionBuffer;
+    private ResourceLayout? _projectionLayout;
+    private ResourceSet? _projectionSet;
+
     private struct Vertex
     {
         public Vector2 Position;
@@ -75,6 +80,12 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         public const uint SizeInBytes = 256; // 64 + 32 + 32 + 32 + 16 + 4 + 4 bytes
     }
 
+    private struct ProjectionBuffer
+    {
+        public Matrix4x4 Projection;
+        public const uint SizeInBytes = 64; // 4x4 matrix = 64 bytes
+    }
+
     private const string VertexCode = @"
     #version 450
 
@@ -82,13 +93,17 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     layout(location = 1) in vec2 TexCoord;
     layout(location = 2) in vec4 Color;
 
+    layout(set = 3, binding = 0) uniform ProjectionBuffer {
+        mat4 Projection;
+    };
+
     layout(location = 0) out vec2 fsin_TexCoord;
     layout(location = 1) out vec4 fsin_Color;
     layout(location = 2) out vec2 fsin_Position;
 
     void main()
     {
-        gl_Position = vec4(Position, 0, 1);
+        gl_Position = Projection * vec4(Position, 0, 1);
         fsin_TexCoord = TexCoord;
         fsin_Position = Position;
         fsin_Color = Color;
@@ -294,6 +309,19 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     {
         ResourceFactory factory = _graphicsDevice.ResourceFactory;
 
+        // Create projection buffer
+        _projectionBuffer = factory.CreateBuffer(new BufferDescription(ProjectionBuffer.SizeInBytes, BufferUsage.UniformBuffer));
+
+        // Create projection layout
+        ResourceLayoutDescription projectionLayoutDesc = new ResourceLayoutDescription(
+            new ResourceLayoutElementDescription("ProjectionBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex));
+        _projectionLayout = factory.CreateResourceLayout(projectionLayoutDesc);
+
+        // Create projection resource set
+        _projectionSet = factory.CreateResourceSet(new ResourceSetDescription(
+            _projectionLayout,
+            _projectionBuffer));
+
         // Create uniform buffers
         _scissorBuffer = factory.CreateBuffer(new BufferDescription(ScissorBuffer.SizeInBytes, BufferUsage.UniformBuffer));
         _brushBuffer = factory.CreateBuffer(new BufferDescription(BrushBuffer.SizeInBytes, BufferUsage.UniformBuffer));
@@ -386,7 +414,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             BlendStateDescription.SingleAlphaBlend,
             DepthStencilStateDescription.Disabled,
             new RasterizerStateDescription(
-                cullMode: FaceCullMode.None,
+                cullMode: FaceCullMode.Back,
                 fillMode: PolygonFillMode.Solid,
                 frontFace: FrontFace.Clockwise,
                 depthClipEnabled: false,
@@ -395,12 +423,26 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             new ShaderSetDescription(
                 new[] { vertexLayout },
                 _shaders),
-            new[] { _textureLayout, _scissorLayout, _brushLayout },
+            new[] { _textureLayout, _scissorLayout, _brushLayout, _projectionLayout },
             _graphicsDevice.SwapchainFramebuffer.OutputDescription);
 
         _pipeline = factory.CreateGraphicsPipeline(pipelineDescription);
         _commandList = factory.CreateCommandList();
     }
+    private void UpdateProjection(float width, float height)
+    {
+        // Create orthographic projection matrix for 2D rendering
+        var projection = Matrix4x4.CreateOrthographicOffCenter(0, width, height, 0, -1, 1);
+        _graphicsDevice.UpdateBuffer(_projectionBuffer!, 0, projection);
+    }
+
+    private Matrix4x4 ToVeldridMatrix(Prowl.Vector.Matrix4x4 mat) => new Matrix4x4(
+        (float)mat.M11, (float)mat.M12, (float)mat.M13, (float)mat.M14,
+        (float)mat.M21, (float)mat.M22, (float)mat.M23, (float)mat.M24,
+        (float)mat.M31, (float)mat.M32, (float)mat.M33, (float)mat.M34,
+        (float)mat.M41, (float)mat.M42, (float)mat.M43, (float)mat.M44
+    );
+
 
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
@@ -408,6 +450,9 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             return;
 
         ResourceFactory factory = _graphicsDevice.ResourceFactory;
+
+        // Update projection matrix
+        UpdateProjection(_window.Width, _window.Height);
 
         // Ensure our buffers are large enough
         uint requiredVertexBufferSize = (uint)(canvas.Vertices.Count * Vertex.SizeInBytes);
@@ -429,13 +474,15 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         var val = random.Next(0, 256);
 
         // Convert vertices to our format
+        //Console.WriteLine($"Vertices Count: {canvas.Vertices.Count} ({System.Math.Min(4, canvas.Vertices.Count)})");
         Vertex[] vertices = new Vertex[canvas.Vertices.Count];
         for (int i = 0; i < canvas.Vertices.Count; i++)
         {
             var v = canvas.Vertices[i];
-            Console.WriteLine($"Vertices Count: {v.x}-{v.y}/{v.u}-{v.v}");
+            //Console.WriteLine($"Vertex {i}: {v.x}-{v.y}/{v.u}-{v.v}");
             vertices[i] = new Vertex
             {
+                //Position = (new Vector2(v.x, v.y) / new Vector2(_window.Width, _window.Height)) - new Vector2(0.5f,0.5f),
                 Position = new Vector2(v.x, v.y),
                 TexCoord = new Vector2(v.u, v.v),
                 Color = new RgbaFloat(v.r / 255f, v.g / 255f, v.b / 255f, v.a / 255f)
@@ -481,6 +528,9 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _commandList.SetIndexBuffer(_indexBuffer, IndexFormat.UInt32);
         _commandList.SetPipeline(_pipeline);
 
+        // Set projection resource set (must be done before any draw calls)
+        _commandList.SetGraphicsResourceSet(3, _projectionSet);
+
         uint indexOffset = 0;
         foreach (var drawCall in drawCalls)
         {
@@ -499,7 +549,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             drawCall.GetScissor(out var scissor, out var extent);
             var scissorData = new ScissorBuffer
             {
-                ScissorMat = scissor,
+                ScissorMat = ToVeldridMatrix(scissor),
                 ScissorExt = new Vector2((float)extent.x, (float)extent.y),
                 Padding = new Vector2(0, 0)
             };
@@ -510,7 +560,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             var brush = drawCall.Brush;
             var brushData = new BrushBuffer
             {
-                BrushMat = brush.BrushMatrix,
+                BrushMat = ToVeldridMatrix(brush.BrushMatrix),
                 BrushColor1 = new Vector4(
                     brush.Color1.R / 255f,
                     brush.Color1.G / 255f,
@@ -586,6 +636,11 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _scissorLayout?.Dispose();
         _brushLayout?.Dispose();
 
+
+        _projectionBuffer?.Dispose();
+        _projectionLayout?.Dispose();
+        _projectionSet?.Dispose();
+
         // Dispose resource sets
         _textureSet?.Dispose();
         _scissorSet?.Dispose();
@@ -616,6 +671,11 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _defaultTextureView?.Dispose();
         _textureLayout?.Dispose();
         _scissorLayout?.Dispose();
+
+        _projectionBuffer?.Dispose();
+        _projectionLayout?.Dispose();
+        _projectionSet?.Dispose();
+
         _brushLayout?.Dispose();
         _textureSet?.Dispose();
         _scissorSet?.Dispose();

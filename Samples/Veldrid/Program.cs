@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Numerics;
+using System.Reflection;
 
 using FontStashSharp;
 
@@ -12,6 +13,8 @@ using Shared;
 using Veldrid;
 using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
+
+using Color = System.Drawing.Color;
 
 namespace VeldridSample
 {
@@ -36,13 +39,26 @@ namespace VeldridSample
             renderer.DisposeResources();*/
             
              
-            var veldridGUIRenderer = new VeldridGUIRenderer(960, 960);
+            var veldridGUIRenderer = new VeldridGUIRenderer(800, 800);
             Paper.Initialize(veldridGUIRenderer, veldridGUIRenderer.Window.Width, veldridGUIRenderer.Window.Height);
 
             PaperDemo.Initialize();
 
             _stopwatch.Start();
             _lastFrameTime = _stopwatch.Elapsed.TotalSeconds;
+
+
+            var fontSystem = new FontSystem();
+
+            // Load fonts with different sizes
+            var assembly = Assembly.GetExecutingAssembly();
+            using (Stream? stream = assembly.GetManifestResourceStream("VeldridSample.EmbeddedResources.font.ttf"))
+            {
+                if (stream == null) throw new Exception("Could not load font resource");
+                fontSystem.AddFont(stream);
+            }
+
+            var font = fontSystem.GetFont(24); // Get the default font at size 16
 
             while (veldridGUIRenderer.Window.Exists)
             {
@@ -52,7 +68,7 @@ namespace VeldridSample
                 double deltaTime = currentTime - _lastFrameTime;
                 _lastFrameTime = currentTime;
 
-                RenderPaper(null, Paper.DeltaTime);
+                RenderPaper(font, Paper.DeltaTime);
             }
             veldridGUIRenderer.DisposeRenderer();
             
@@ -69,12 +85,12 @@ namespace VeldridSample
             // Define your UI
 
             // Main content
-            var random = new System.Random();
-            var random2 = new System.Random();
-            var random3 = new System.Random();
+            //var random = new System.Random();
             ///var val = random.Next(0, 256);
             //Paper.Box("MainContent").BackgroundColor(System.Drawing.Color.FromArgb(random.Next(0,256), random2.Next(0, 256), random3.Next(0, 256)));
-            //Paper.Box("MainContent").Position(0, 0).Size(1).BackgroundColor(System.Drawing.Color.FromArgb(0,0,255));//(System.Drawing.Color.FromArgb(val, val, val));
+            //Paper.Box("MainContent").Position(0, 0).Size(1).BackgroundColor(System.Drawing.Color.FromArgb(220,220,220));//(System.Drawing.Color.FromArgb(val, val, val));
+
+            //Paper.Box("MainContent").BackgroundColor(System.Drawing.Color.FromArgb(220, 220, 220));//(System.Drawing.Color.FromArgb(val, val, val));
             using (Paper.Column("MainContainer")
                 .BackgroundColor(System.Drawing.Color.FromArgb(240, 240, 240))
                 .Enter())
@@ -83,6 +99,7 @@ namespace VeldridSample
                 using (Paper.Box("Header")
                     .Height(60)
                     .BackgroundColor(System.Drawing.Color.FromArgb(50, 120, 200))
+                    .Text(Text.Center("My Application", font, Color.White))
                     .Enter()) { }
 
                 // Content area
