@@ -36,7 +36,7 @@ namespace VeldridSample
             renderer.DisposeResources();*/
             
              
-            var veldridGUIRenderer = new VeldridGUIRenderer(960, 540);
+            var veldridGUIRenderer = new VeldridGUIRenderer(960, 960);
             Paper.Initialize(veldridGUIRenderer, veldridGUIRenderer.Window.Width, veldridGUIRenderer.Window.Height);
 
             PaperDemo.Initialize();
@@ -72,10 +72,10 @@ namespace VeldridSample
             var random = new System.Random();
             var random2 = new System.Random();
             var random3 = new System.Random();
-            var val = random.Next(0, 256);
+            ///var val = random.Next(0, 256);
             //Paper.Box("MainContent").BackgroundColor(System.Drawing.Color.FromArgb(random.Next(0,256), random2.Next(0, 256), random3.Next(0, 256)));
-            Paper.Box("MainContent").BackgroundColor(System.Drawing.Color.FromArgb(val, val, val));
-            /*using (Paper.Column("MainContainer")
+            //Paper.Box("MainContent").Position(0, 0).Size(1).BackgroundColor(System.Drawing.Color.FromArgb(0,0,255));//(System.Drawing.Color.FromArgb(val, val, val));
+            using (Paper.Column("MainContainer")
                 .BackgroundColor(System.Drawing.Color.FromArgb(240, 240, 240))
                 .Enter())
             {
@@ -96,7 +96,7 @@ namespace VeldridSample
                     // Main content
                     Paper.Box("MainContent");
                 }
-            }*/
+            }
 
             // End the UI frame
             Paper.EndFrame();

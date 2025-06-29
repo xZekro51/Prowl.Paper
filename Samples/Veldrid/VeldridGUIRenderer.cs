@@ -15,6 +15,9 @@ using Veldrid.OpenGLBinding;
 using Veldrid.Sdl2;
 using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
+using Vector2 = System.Numerics.Vector2;
+using Vector3 = System.Numerics.Vector3;
+using Vector4 = System.Numerics.Vector4;
 
 namespace VeldridSample;
 internal class VeldridGUIRenderer : ICanvasRenderer
@@ -87,9 +90,23 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     {
         gl_Position = vec4(Position, 0, 1);
         fsin_TexCoord = TexCoord;
-        fsin_Color = Color;
         fsin_Position = Position;
+        fsin_Color = Color;
     }";
+
+    /*private const string FragmentCode = @"
+    #version 450
+
+    layout(location = 0) in vec2 fsin_TexCoord;
+    layout(location = 1) in vec4 fsin_Color;
+    layout(location = 2) in vec2 fsin_Position;
+
+    layout(location = 0) out vec4 fsout_Color;
+
+    void main()
+    {
+        fsout_Color = fsin_Color;
+    }";*/
 
     private const string FragmentCode = @"
     #version 450
@@ -175,6 +192,11 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         vec2 distanceFromEdges = abs(transformedPoint) - scissorExt;
         vec2 smoothEdges = vec2(0.5, 0.5) - distanceFromEdges;
         return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
+    }
+
+    void main_test()
+    {
+        fsout_Color = fsin_Color;
     }
 
     void main()
@@ -309,17 +331,21 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _vertexBuffer = factory.CreateBuffer(new BufferDescription(1024 * Vertex.SizeInBytes, BufferUsage.VertexBuffer | BufferUsage.Dynamic));
         _indexBuffer = factory.CreateBuffer(new BufferDescription(1024 * sizeof(uint), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
 
+        // We need to use VertexElementSemantic.TextureCoordinate because SPIR-V generates
+        // all TEXCOORD semantics when translating to HLSL, hence thee neeed.
+
         // Create vertex layout
         VertexLayoutDescription vertexLayout = new VertexLayoutDescription(
-            new VertexElementDescription("Position", VertexElementSemantic.Position, VertexElementFormat.Float2),
+            new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
             new VertexElementDescription("TexCoord", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-            new VertexElementDescription("Color", VertexElementSemantic.Color, VertexElementFormat.Float4));
+            new VertexElementDescription("Color", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float4));
 
         // Create shaders
         ShaderDescription vertexShaderDesc = new ShaderDescription(
             ShaderStages.Vertex,
             Encoding.UTF8.GetBytes(VertexCode),
             "main");
+
         ShaderDescription fragmentShaderDesc = new ShaderDescription(
             ShaderStages.Fragment,
             Encoding.UTF8.GetBytes(FragmentCode),
@@ -363,9 +389,9 @@ internal class VeldridGUIRenderer : ICanvasRenderer
                 cullMode: FaceCullMode.None,
                 fillMode: PolygonFillMode.Solid,
                 frontFace: FrontFace.Clockwise,
-                depthClipEnabled: true,
+                depthClipEnabled: false,
                 scissorTestEnabled: false),
-            PrimitiveTopology.TriangleList,
+            PrimitiveTopology.TriangleStrip,
             new ShaderSetDescription(
                 new[] { vertexLayout },
                 _shaders),
@@ -399,11 +425,15 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             _indexBuffer = factory.CreateBuffer(new BufferDescription(requiredIndexBufferSize, BufferUsage.IndexBuffer | BufferUsage.Dynamic));
         }
 
+        var random = new System.Random();
+        var val = random.Next(0, 256);
+
         // Convert vertices to our format
         Vertex[] vertices = new Vertex[canvas.Vertices.Count];
         for (int i = 0; i < canvas.Vertices.Count; i++)
         {
             var v = canvas.Vertices[i];
+            Console.WriteLine($"Vertices Count: {v.x}-{v.y}/{v.u}-{v.v}");
             vertices[i] = new Vertex
             {
                 Position = new Vector2(v.x, v.y),
@@ -411,6 +441,33 @@ internal class VeldridGUIRenderer : ICanvasRenderer
                 Color = new RgbaFloat(v.r / 255f, v.g / 255f, v.b / 255f, v.a / 255f)
             };
         }
+
+        /*Vertex[] vertices = new Vertex[4];
+
+        vertices[0] = new Vertex
+        {
+            Position = new Vector2(-.75f, .75f),
+            TexCoord = new Vector2(0, 0),
+            Color = new RgbaFloat(255 / 255f, 255 / 255f, 255 / 255f, 1f)
+        };
+        vertices[1] = new Vertex
+        {
+            Position = new Vector2(.75f, .75f),
+            TexCoord = new Vector2(1, 0),
+            Color = new RgbaFloat(255 / 255f, 255 / 255f, 255 / 255f, 1f)
+        };
+        vertices[2] = new Vertex
+        {
+            Position = new Vector2(-.75f, -.75f),
+            TexCoord = new Vector2(0, 1),
+            Color = new RgbaFloat(255 / 255f, 255 / 255f, 255 / 255f, 1f)
+        };
+        vertices[3] = new Vertex
+        {
+            Position = new Vector2(.75f, -.75f),
+            TexCoord = new Vector2(1, 1),
+            Color = new RgbaFloat(255 / 255f, 255 / 255f, 255 / 255f, 1f)
+        };*/
 
         _commandList!.Begin();
         _commandList.SetFramebuffer(_graphicsDevice.SwapchainFramebuffer);
