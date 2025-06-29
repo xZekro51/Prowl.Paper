@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -25,11 +24,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
 
     private readonly GraphicsDevice _graphicsDevice;
     public GraphicsDevice GraphicsDevice => _graphicsDevice;
-
-    private Matrix4x4 _projection;
-    private DeviceBuffer _projectionBuffer;
-    private ResourceLayout _projectionLayout;
-    private ResourceSet _projectionSet;
 
     private CommandList? _commandList;
     private DeviceBuffer? _vertexBuffer;
@@ -78,36 +72,24 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         public const uint SizeInBytes = 256; // 64 + 32 + 32 + 32 + 16 + 4 + 4 bytes
     }
 
-    private struct ProjectionBuffer
-    {
-        public Matrix4x4 Projection;
-        public const uint SizeInBytes = 64; // 64 bytes
-    }
-
-
     private const string VertexCode = @"
-        #version 450
+    #version 450
 
-        layout(location = 0) in vec2 Position;
-        layout(location = 1) in vec2 TexCoord;
-        layout(location = 2) in vec4 Color;
+    layout(location = 0) in vec2 Position;
+    layout(location = 1) in vec2 TexCoord;
+    layout(location = 2) in vec4 Color;
 
-        layout(set = 3, binding = 0) uniform ProjectionBuffer {
-            mat4 projection;
-        };
+    layout(location = 0) out vec2 fsin_TexCoord;
+    layout(location = 1) out vec4 fsin_Color;
+    layout(location = 2) out vec2 fsin_Position;
 
-        layout(location = 0) out vec2 fsin_TexCoord;
-        layout(location = 1) out vec4 fsin_Color;
-        layout(location = 2) out vec2 fsin_Position;
-
-        void main()
-        {
-            fsin_TexCoord = TexCoord;
-            fsin_Color = Color;
-            fsin_Position = Position;
-            gl_Position = projection * vec4(Position, 0.0, 1.0);
-        }";
-
+    void main()
+    {
+        gl_Position = vec4(Position, 0, 1);
+        fsin_TexCoord = TexCoord;
+        fsin_Color = Color;
+        fsin_Position = Position;
+    }";
 
     private const string FragmentCode = @"
     #version 450
@@ -238,7 +220,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _graphicsDevice = VeldridStartup.CreateGraphicsDevice(_window, options);
 
         CreateResources();
-        UpdateProjection(width, height);
     }
 
     public object CreateTexture(uint width, uint height)
@@ -291,22 +272,9 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     {
         ResourceFactory factory = _graphicsDevice.ResourceFactory;
 
-        // Create projection buffer
-        _projectionBuffer = factory.CreateBuffer(new BufferDescription((uint)Marshal.SizeOf<ProjectionBuffer>(), BufferUsage.UniformBuffer));
-        
-        // Create projection layout
-        ResourceLayoutDescription projectionLayoutDesc = new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("ProjectionBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex));
-        _projectionLayout = factory.CreateResourceLayout(projectionLayoutDesc);
-
-        // Create projection set
-        _projectionSet = factory.CreateResourceSet(new ResourceSetDescription(
-            _projectionLayout,
-            _projectionBuffer));
-
         // Create uniform buffers
-        _scissorBuffer = factory.CreateBuffer(new BufferDescription((uint)Marshal.SizeOf<ScissorBuffer>(), BufferUsage.UniformBuffer));
-        _brushBuffer = factory.CreateBuffer(new BufferDescription((uint)Marshal.SizeOf<BrushBuffer>(), BufferUsage.UniformBuffer));
+        _scissorBuffer = factory.CreateBuffer(new BufferDescription(ScissorBuffer.SizeInBytes, BufferUsage.UniformBuffer));
+        _brushBuffer = factory.CreateBuffer(new BufferDescription(BrushBuffer.SizeInBytes, BufferUsage.UniformBuffer));
 
         // Create texture layout and resources
         ResourceLayoutDescription texLayoutDesc = new ResourceLayoutDescription(
@@ -343,9 +311,9 @@ internal class VeldridGUIRenderer : ICanvasRenderer
 
         // Create vertex layout
         VertexLayoutDescription vertexLayout = new VertexLayoutDescription(
-            new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
+            new VertexElementDescription("Position", VertexElementSemantic.Position, VertexElementFormat.Float2),
             new VertexElementDescription("TexCoord", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-            new VertexElementDescription("Color", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float4));
+            new VertexElementDescription("Color", VertexElementSemantic.Color, VertexElementFormat.Float4));
 
         // Create shaders
         ShaderDescription vertexShaderDesc = new ShaderDescription(
@@ -401,14 +369,11 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             new ShaderSetDescription(
                 new[] { vertexLayout },
                 _shaders),
-            new[] { _textureLayout, _scissorLayout, _brushLayout, _projectionLayout },
+            new[] { _textureLayout, _scissorLayout, _brushLayout },
             _graphicsDevice.SwapchainFramebuffer.OutputDescription);
 
         _pipeline = factory.CreateGraphicsPipeline(pipelineDescription);
         _commandList = factory.CreateCommandList();
-
-        // Initialize projection matrix
-        UpdateProjection(_window.Width, _window.Height);
     }
 
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
@@ -459,14 +424,14 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _commandList.SetIndexBuffer(_indexBuffer, IndexFormat.UInt32);
         _commandList.SetPipeline(_pipeline);
 
-        // Set the projection resource set
-        _commandList.SetGraphicsResourceSet(3, _projectionSet);
-
         uint indexOffset = 0;
         foreach (var drawCall in drawCalls)
         {
             // Set texture
             var textureView = drawCall.Texture as TextureView ?? _defaultTextureView;
+
+            Console.WriteLine($"IsTextureDefault: {textureView == _defaultTextureView}");
+
             var resourceSet = factory.CreateResourceSet(new ResourceSetDescription(
                 _textureLayout!,
                 textureView,
@@ -532,18 +497,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _graphicsDevice.SwapBuffers();
     }
 
-    /// <summary>
-    /// Update the projection matrix when the window is resized
-    /// </summary>
-    public void UpdateProjection(int width, int height)
-    {
-        // Create orthographic projection matrix for 2D rendering
-        // Note: This creates a projection that maps the screen coordinates 
-        // where (0,0) is top-left and (width,height) is bottom-right
-        _projection = Matrix4x4.CreateOrthographicOffCenter(0, width, height, 0, -1, 1);
-        _graphicsDevice.UpdateBuffer(_projectionBuffer, 0, _projection);
-    }
-
     public void DisposeRenderer()
     {
         // Dispose shaders
@@ -560,7 +513,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _indexBuffer?.Dispose();
         _scissorBuffer?.Dispose();
         _brushBuffer?.Dispose();
-        _projectionBuffer?.Dispose();
 
         // Dispose pipeline
         _pipeline?.Dispose();
@@ -576,13 +528,11 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _textureLayout?.Dispose();
         _scissorLayout?.Dispose();
         _brushLayout?.Dispose();
-        _projectionLayout?.Dispose();
 
         // Dispose resource sets
         _textureSet?.Dispose();
         _scissorSet?.Dispose();
         _brushSet?.Dispose();
-        _projectionSet?.Dispose();
 
         // Dispose sampler
         _sampler?.Dispose();
@@ -605,17 +555,14 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _indexBuffer?.Dispose();
         _scissorBuffer?.Dispose();
         _brushBuffer?.Dispose();
-        _projectionBuffer?.Dispose();
         _defaultTexture?.Dispose();
         _defaultTextureView?.Dispose();
         _textureLayout?.Dispose();
         _scissorLayout?.Dispose();
         _brushLayout?.Dispose();
-        _projectionLayout?.Dispose();
         _textureSet?.Dispose();
         _scissorSet?.Dispose();
         _brushSet?.Dispose();
-        _projectionSet?.Dispose();
         _sampler?.Dispose();
         _graphicsDevice?.Dispose();
     }

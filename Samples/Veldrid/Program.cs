@@ -22,8 +22,21 @@ namespace VeldridSample
 
         static void Main(string[] args)
         {
-            var veldridGUIRenderer = new VeldridGUIRenderer(960, 540);
+            /*VeldridRenderer renderer = new VeldridRenderer(800,600);
 
+            while(renderer.Window.Exists)
+            {
+                renderer.Window.PumpEvents();
+                double currentTime = _stopwatch.Elapsed.TotalSeconds;
+                double deltaTime = currentTime - _lastFrameTime;
+                _lastFrameTime = currentTime;
+                renderer.Draw();
+            }
+
+            renderer.DisposeResources();*/
+            
+             
+            var veldridGUIRenderer = new VeldridGUIRenderer(960, 540);
             Paper.Initialize(veldridGUIRenderer, veldridGUIRenderer.Window.Width, veldridGUIRenderer.Window.Height);
 
             PaperDemo.Initialize();
@@ -39,10 +52,12 @@ namespace VeldridSample
                 double deltaTime = currentTime - _lastFrameTime;
                 _lastFrameTime = currentTime;
 
-                RenderPaper(null, deltaTime);
+                RenderPaper(null, Paper.DeltaTime);
             }
-
             veldridGUIRenderer.DisposeRenderer();
+            
+            
+
         }
 
         public static void RenderPaper(SpriteFontBase font, double deltaTime)
@@ -50,7 +65,38 @@ namespace VeldridSample
             // Begin the UI frame with deltaTime
             Paper.BeginFrame(deltaTime);
 
-            PaperDemo.RenderUI();
+            //PaperDemo.RenderUI();
+            // Define your UI
+
+            // Main content
+            var random = new System.Random();
+            var random2 = new System.Random();
+            var random3 = new System.Random();
+            var val = random.Next(0, 256);
+            //Paper.Box("MainContent").BackgroundColor(System.Drawing.Color.FromArgb(random.Next(0,256), random2.Next(0, 256), random3.Next(0, 256)));
+            Paper.Box("MainContent").BackgroundColor(System.Drawing.Color.FromArgb(val, val, val));
+            /*using (Paper.Column("MainContainer")
+                .BackgroundColor(System.Drawing.Color.FromArgb(240, 240, 240))
+                .Enter())
+            {
+                // A header
+                using (Paper.Box("Header")
+                    .Height(60)
+                    .BackgroundColor(System.Drawing.Color.FromArgb(50, 120, 200))
+                    .Enter()) { }
+
+                // Content area
+                using (Paper.Row("Content").Enter())
+                {
+                    // Sidebar
+                    Paper.Box("Sidebar")
+                        .Width(200)
+                        .BackgroundColor(System.Drawing.Color.FromArgb(220, 220, 220));
+
+                    // Main content
+                    Paper.Box("MainContent");
+                }
+            }*/
 
             // End the UI frame
             Paper.EndFrame();
