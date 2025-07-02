@@ -3,7 +3,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -15,10 +18,11 @@ using Veldrid.OpenGLBinding;
 using Veldrid.Sdl2;
 using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
+
+using Matrix4x4 = System.Numerics.Matrix4x4;
 using Vector2 = System.Numerics.Vector2;
 using Vector3 = System.Numerics.Vector3;
 using Vector4 = System.Numerics.Vector4;
-using Matrix4x4 = System.Numerics.Matrix4x4;
 
 namespace VeldridSample;
 internal class VeldridGUIRenderer : ICanvasRenderer
@@ -67,12 +71,11 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         public RgbaFloat Color;
         public const uint SizeInBytes = 48; // 8 + 8 + 16 bytes
     }
-
     private struct ScissorBuffer
     {
         public Matrix4x4 ScissorMat;
         public Vector2 ScissorExt;
-        public Vector2 Padding; // For alignment
+        public int Padding;
         public const uint SizeInBytes = 160; // 64 + 16 + 16 bytes
     }
 
@@ -84,7 +87,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         public Vector4 BrushParams;
         public Vector2 BrushParams2;
         public int BrushType;
-        public int Padding; // For alignment
+        public int Padding;
         public const uint SizeInBytes = 256; // 64 + 32 + 32 + 32 + 16 + 4 + 4 bytes
     }
 
@@ -94,7 +97,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         public const uint SizeInBytes = 64; // 4x4 matrix = 64 bytes
     }
 
-    private const string VertexCode = @"
+    private const string BASE_VertexCode = @"
     #version 450
 
     layout(location = 0) in vec2 Position;
@@ -118,7 +121,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     }";
 
 
-    private const string FragmentCode = @"
+    private const string BASE_FragmentCode = @"
     #version 450
 
     layout(location = 0) in vec2 fsin_TexCoord;
@@ -232,6 +235,8 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     }";
 
 
+    protected readonly string VertexCode;
+    protected readonly string FragmentCode;
 
     public VeldridGUIRenderer(int width, int height)
     {
@@ -249,6 +254,27 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         //Veldrid.SDL.SDL_GetDisplayDPI(_window.DisplayIndex, out float ddpi, out float hdpi, out float vdpi);
         _dpiScale = Graphics.GetDpiForWindow(_window.Handle) / 96.0f; // 96 is the default DPI
 
+        var assembly = Assembly.GetExecutingAssembly();
+        using (Stream? stream = assembly.GetManifestResourceStream("VeldridSample.EmbeddedResources.Paper-VertexShader.glsl"))
+        {
+            if (stream == null)
+                throw new InvalidOperationException("Could not find embedded vertex shader resource");
+
+            using (StreamReader reader = new StreamReader(stream)) {
+                VertexCode = reader.ReadToEnd();
+            }
+        }
+
+        using (Stream? stream = assembly.GetManifestResourceStream("VeldridSample.EmbeddedResources.Paper-FragmentShader.glsl"))
+        {
+            if (stream == null)
+                throw new InvalidOperationException("Could not find embedded vertex shader resource");
+
+            using (StreamReader reader = new StreamReader(stream))
+            {
+                FragmentCode = reader.ReadToEnd();
+            }
+        }
 
         GraphicsDeviceOptions options = new GraphicsDeviceOptions
         {
@@ -438,13 +464,13 @@ internal class VeldridGUIRenderer : ICanvasRenderer
                 cullMode: FaceCullMode.Front,
                 fillMode: PolygonFillMode.Solid,
                 frontFace: FrontFace.Clockwise,
-                depthClipEnabled: true,
+                depthClipEnabled: false,
                 scissorTestEnabled: false),
             PrimitiveTopology.TriangleList,
             new ShaderSetDescription(
                 new[] { vertexLayout },
                 _shaders),
-            new[] { _textureLayout, _scissorLayout, _brushLayout, _projectionLayout },
+            new[] { _projectionLayout, _textureLayout, _scissorLayout, _brushLayout },
             _graphicsDevice.SwapchainFramebuffer.OutputDescription);
 
         _pipeline = factory.CreateGraphicsPipeline(pipelineDescription);
@@ -510,33 +536,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             };
         }
 
-        /*Vertex[] vertices = new Vertex[4];
-
-        vertices[0] = new Vertex
-        {
-            Position = new Vector2(-.75f, .75f),
-            TexCoord = new Vector2(0, 0),
-            Color = new RgbaFloat(255 / 255f, 255 / 255f, 255 / 255f, 1f)
-        };
-        vertices[1] = new Vertex
-        {
-            Position = new Vector2(.75f, .75f),
-            TexCoord = new Vector2(1, 0),
-            Color = new RgbaFloat(255 / 255f, 255 / 255f, 255 / 255f, 1f)
-        };
-        vertices[2] = new Vertex
-        {
-            Position = new Vector2(-.75f, -.75f),
-            TexCoord = new Vector2(0, 1),
-            Color = new RgbaFloat(255 / 255f, 255 / 255f, 255 / 255f, 1f)
-        };
-        vertices[3] = new Vertex
-        {
-            Position = new Vector2(.75f, -.75f),
-            TexCoord = new Vector2(1, 1),
-            Color = new RgbaFloat(255 / 255f, 255 / 255f, 255 / 255f, 1f)
-        };*/
-
         _commandList!.Begin();
         _commandList.SetFramebuffer(_graphicsDevice.SwapchainFramebuffer);
         _commandList.ClearColorTarget(0, RgbaFloat.Black);
@@ -550,7 +549,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _commandList.SetPipeline(_pipeline);
 
         // Set projection resource set (must be done before any draw calls)
-        _commandList.SetGraphicsResourceSet(3, _projectionSet);
+        _commandList.SetGraphicsResourceSet(0, _projectionSet);
 
         uint indexOffset = 0;
         foreach (var drawCall in drawCalls)
@@ -562,18 +561,17 @@ internal class VeldridGUIRenderer : ICanvasRenderer
                 _textureLayout!,
                 textureView,
                 _sampler!));
-            _commandList.SetGraphicsResourceSet(0, resourceSet);
+            _commandList.SetGraphicsResourceSet(1, resourceSet);
 
             // Update and set scissor uniforms
             drawCall.GetScissor(out var scissor, out var extent);
             var scissorData = new ScissorBuffer
             {
                 ScissorMat = ToVeldridMatrix(scissor),
-                ScissorExt = new Vector2((float)extent.x, (float)extent.y),
-                Padding = new Vector2(0, 0)
+                ScissorExt = new Vector2((float)extent.x, (float)extent.y)
             };
-            _graphicsDevice.UpdateBuffer(_scissorBuffer!, 0, scissorData);
-            _commandList.SetGraphicsResourceSet(1, _scissorSet!);
+            _graphicsDevice.UpdateBuffer(_scissorBuffer, 0, scissorData);
+            _commandList.SetGraphicsResourceSet(2, _scissorSet);
 
             // Update and set brush uniforms
             var brush = drawCall.Brush;
@@ -598,11 +596,10 @@ internal class VeldridGUIRenderer : ICanvasRenderer
                 BrushParams2 = new Vector2(
                     (float)brush.CornerRadii,
                     (float)brush.Feather),
-                BrushType = (int)brush.Type,
-                Padding = 0
+                BrushType = (int)brush.Type
             };
             _graphicsDevice.UpdateBuffer(_brushBuffer!, 0, brushData);
-            _commandList.SetGraphicsResourceSet(2, _brushSet!);
+            _commandList.SetGraphicsResourceSet(3, _brushSet!);
 
             // Draw the elements
             _commandList.DrawIndexed(

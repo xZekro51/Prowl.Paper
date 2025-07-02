@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -9,10 +9,14 @@
 
   <ItemGroup>
     <None Remove="EmbeddedResources\font.ttf" />
+    <None Remove="EmbeddedResources\Paper-FragmentShader.glsl" />
+    <None Remove="EmbeddedResources\Paper-VertexShader.glsl" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="EmbeddedResources\font.ttf" />
+    <EmbeddedResource Include="EmbeddedResources\Paper-FragmentShader.glsl" />
+    <EmbeddedResource Include="EmbeddedResources\Paper-VertexShader.glsl" />
   </ItemGroup>
 
   <ItemGroup>
