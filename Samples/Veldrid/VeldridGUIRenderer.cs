@@ -43,11 +43,8 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     private Shader[]? _shaders;
     private Pipeline? _pipeline;
 
-    private DeviceBuffer? _scissorBuffer;
     private DeviceBuffer? _brushBuffer;
-    private ResourceLayout? _scissorLayout;
     private ResourceLayout? _brushLayout;
-    private ResourceSet? _scissorSet;
     private ResourceSet? _brushSet;
 
     private Texture? _defaultTexture;
@@ -238,21 +235,29 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     protected readonly string VertexCode;
     protected readonly string FragmentCode;
 
+    public delegate void WindowResizeEvent();
+    public event WindowResizeEvent OnWindowResized;
+
     public VeldridGUIRenderer(int width, int height)
     {
+
         WindowCreateInfo windowInfo = new WindowCreateInfo()
         {
             X = 100,
             Y = 100,
-            WindowWidth = width,
-            WindowHeight = height,
+            WindowWidth = (int)(width),
+            WindowHeight = (int)(height),
             WindowTitle = "Veldrid - GUI Renderer"
         };
         _window = VeldridStartup.CreateWindow(ref windowInfo);
+        _window.Resized += _window_Resized;
 
         // Get DPI scale
-        //Veldrid.SDL.SDL_GetDisplayDPI(_window.DisplayIndex, out float ddpi, out float hdpi, out float vdpi);
         _dpiScale = Graphics.GetDpiForWindow(_window.Handle) / 96.0f; // 96 is the default DPI
+
+        Console.WriteLine($"DPI: {_dpiScale}");
+
+        _input = new VeldridGUIInput(_window);
 
         var assembly = Assembly.GetExecutingAssembly();
         using (Stream? stream = assembly.GetManifestResourceStream("VeldridSample.EmbeddedResources.Paper-VertexShader.glsl"))
@@ -285,6 +290,12 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _graphicsDevice = VeldridStartup.CreateGraphicsDevice(_window, options);
 
         CreateResources();
+    }
+
+    private void _window_Resized()
+    {
+        if (OnWindowResized != null)
+            OnWindowResized();
     }
 
     public object CreateTexture(uint width, uint height)
@@ -352,7 +363,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             _projectionBuffer));
 
         // Create uniform buffers
-        _scissorBuffer = factory.CreateBuffer(new BufferDescription(ScissorBuffer.SizeInBytes, BufferUsage.UniformBuffer));
         _brushBuffer = factory.CreateBuffer(new BufferDescription(BrushBuffer.SizeInBytes, BufferUsage.UniformBuffer));
 
         // Create texture layout and resources
@@ -361,10 +371,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             new ResourceLayoutElementDescription("Sampler", ResourceKind.Sampler, ShaderStages.Fragment));
         _textureLayout = factory.CreateResourceLayout(texLayoutDesc);
 
-        // Create scissor layout and resources
-        ResourceLayoutDescription scissorLayoutDesc = new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("ScissorBuffer", ResourceKind.UniformBuffer, ShaderStages.Fragment));
-        _scissorLayout = factory.CreateResourceLayout(scissorLayoutDesc);
 
         // Create brush layout and resources
         ResourceLayoutDescription brushLayoutDesc = new ResourceLayoutDescription(
@@ -430,9 +436,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             _defaultTextureView,
             _sampler));
 
-        _scissorSet = factory.CreateResourceSet(new ResourceSetDescription(
-            _scissorLayout,
-            _scissorBuffer));
 
         _brushSet = factory.CreateResourceSet(new ResourceSetDescription(
             _brushLayout,
@@ -465,12 +468,12 @@ internal class VeldridGUIRenderer : ICanvasRenderer
                 fillMode: PolygonFillMode.Solid,
                 frontFace: FrontFace.Clockwise,
                 depthClipEnabled: false,
-                scissorTestEnabled: false),
+                scissorTestEnabled: true),
             PrimitiveTopology.TriangleList,
             new ShaderSetDescription(
                 new[] { vertexLayout },
                 _shaders),
-            new[] { _projectionLayout, _textureLayout, _scissorLayout, _brushLayout },
+            new[] { _projectionLayout, _textureLayout, _brushLayout },
             _graphicsDevice.SwapchainFramebuffer.OutputDescription);
 
         _pipeline = factory.CreateGraphicsPipeline(pipelineDescription);
@@ -479,7 +482,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     private void UpdateProjection(float width, float height)
     {
         // Create orthographic projection matrix for 2D rendering
-        var projection = Matrix4x4.CreateOrthographicOffCenter(0, width / _dpiScale, height / _dpiScale, 0, -1, 1);
+        var projection = Matrix4x4.CreateOrthographicOffCenter(0, width / DPIScale, height / DPIScale, 0, -1, 1);
         _graphicsDevice.UpdateBuffer(_projectionBuffer!, 0, projection);
     }
 
@@ -500,6 +503,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
 
         // Update projection matrix
         UpdateProjection(_window.Width, _window.Height);
+
 
         // Ensure our buffers are large enough
         uint requiredVertexBufferSize = (uint)(canvas.Vertices.Count * Vertex.SizeInBytes);
@@ -530,7 +534,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
             vertices[i] = new Vertex
             {
                 //Position = (new Vector2(v.x, v.y) / new Vector2(_window.Width, _window.Height)) - new Vector2(0.5f,0.5f),
-                Position = new Vector2(v.x / _dpiScale, v.y / _dpiScale),
+                Position = new Vector2(v.x / DPIScale, v.y / DPIScale),
                 TexCoord = new Vector2(v.u, v.v),
                 Color = new RgbaFloat(v.r / 255f, v.g / 255f, v.b / 255f, v.a / 255f)
             };
@@ -551,6 +555,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         // Set projection resource set (must be done before any draw calls)
         _commandList.SetGraphicsResourceSet(0, _projectionSet);
 
+        int drawCallsCount = 0;
         uint indexOffset = 0;
         foreach (var drawCall in drawCalls)
         {
@@ -565,13 +570,36 @@ internal class VeldridGUIRenderer : ICanvasRenderer
 
             // Update and set scissor uniforms
             drawCall.GetScissor(out var scissor, out var extent);
-            var scissorData = new ScissorBuffer
+
+            var mat = scissor;
+
+            /*Console.WriteLine($"[{extent.x};{extent.y}]");
+            Console.WriteLine($"{(float)mat.M11} {(float)mat.M12} {(float)mat.M13} {(float)mat.M14}");
+            Console.WriteLine($"{(float)mat.M21} {(float)mat.M22} {(float)mat.M23} {(float)mat.M24}");
+            Console.WriteLine($"{(float)mat.M31} {(float)mat.M32} {(float)mat.M33} {(float)mat.M34}");
+            Console.WriteLine($"{(float)mat.M41} {(float)mat.M42} {(float)mat.M43} {(float)mat.M44}");*/
+
+            if (extent.x > 1)
             {
-                ScissorMat = ToVeldridMatrix(scissor),
-                ScissorExt = new Vector2((float)extent.x, (float)extent.y)
-            };
-            _graphicsDevice.UpdateBuffer(_scissorBuffer, 0, scissorData);
-            _commandList.SetGraphicsResourceSet(2, _scissorSet);
+                // Transform to screen coordinates
+                Vector2 screenTopLeft = Vector2.Transform(Vector2.Zero, ToVeldridMatrix(scissor));
+
+                var targetCoordinates = Vector2.Zero - screenTopLeft - new Vector2((float)extent.x, (float)extent.y);
+
+                uint x = (uint)targetCoordinates.X;
+                uint y = (uint)targetCoordinates.Y;
+                uint width = (uint)(extent.x * 2);
+                uint height = (uint)(extent.y * 2);
+
+                _commandList.SetScissorRect(0,
+                    x, y,
+                    width, height);
+            }
+            else
+            {
+                // Reset scissor to full viewport
+                _commandList.SetScissorRect(0, 0, 0, (uint)_window.Width, (uint)_window.Height);
+            }
 
             // Update and set brush uniforms
             var brush = drawCall.Brush;
@@ -599,7 +627,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
                 BrushType = (int)brush.Type
             };
             _graphicsDevice.UpdateBuffer(_brushBuffer!, 0, brushData);
-            _commandList.SetGraphicsResourceSet(3, _brushSet!);
+            _commandList.SetGraphicsResourceSet(2, _brushSet!);
 
             // Draw the elements
             _commandList.DrawIndexed(
@@ -613,6 +641,9 @@ internal class VeldridGUIRenderer : ICanvasRenderer
 
             // Dispose temporary resource set
             resourceSet.Dispose();
+            //drawCallsCount++;
+            //if (drawCallsCount >= 21)
+            //    break;
         }
 
         _commandList.End();
@@ -634,7 +665,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         // Dispose buffers
         _vertexBuffer?.Dispose();
         _indexBuffer?.Dispose();
-        _scissorBuffer?.Dispose();
+        //_scissorBuffer?.Dispose();
         _brushBuffer?.Dispose();
 
         // Dispose pipeline
@@ -649,7 +680,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
 
         // Dispose layouts
         _textureLayout?.Dispose();
-        _scissorLayout?.Dispose();
+        //_scissorLayout?.Dispose();
         _brushLayout?.Dispose();
 
 
@@ -659,7 +690,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
 
         // Dispose resource sets
         _textureSet?.Dispose();
-        _scissorSet?.Dispose();
+        //_scissorSet?.Dispose();
         _brushSet?.Dispose();
 
         // Dispose sampler
@@ -681,12 +712,12 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         _commandList?.Dispose();
         _vertexBuffer?.Dispose();
         _indexBuffer?.Dispose();
-        _scissorBuffer?.Dispose();
+        //_scissorBuffer?.Dispose();
         _brushBuffer?.Dispose();
         _defaultTexture?.Dispose();
         _defaultTextureView?.Dispose();
         _textureLayout?.Dispose();
-        _scissorLayout?.Dispose();
+        //_scissorLayout?.Dispose();
 
         _projectionBuffer?.Dispose();
         _projectionLayout?.Dispose();
@@ -694,7 +725,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
 
         _brushLayout?.Dispose();
         _textureSet?.Dispose();
-        _scissorSet?.Dispose();
+        //_scissorSet?.Dispose();
         _brushSet?.Dispose();
         _sampler?.Dispose();
         _graphicsDevice?.Dispose();
