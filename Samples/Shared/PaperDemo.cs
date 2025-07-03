@@ -10,11 +10,11 @@ namespace Shared
 {
     public static partial class PaperDemo
     {
-        static FontSystem fontSystem;
+        public static FontSystem fontSystem;
         static SpriteFontBase fontSmall;
         static SpriteFontBase fontMedium;
         static SpriteFontBase fontLarge;
-        static SpriteFontBase fontTitle;
+        public static SpriteFontBase fontTitle;
 
         // Track state for interactive elements
         static double sliderValue = 0.5f;
@@ -352,6 +352,7 @@ namespace Shared
 
         private static void RenderMainContent()
         {
+            return;
             using (Paper.Column("MainContent")
                 .Margin(0, 15, 15, 15)
                 .Enter())

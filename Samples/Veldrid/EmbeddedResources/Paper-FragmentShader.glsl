@@ -79,13 +79,72 @@ float calculateBrushFactor() {
 // Returns: 1.0 for points fully inside, 0.0 for points fully outside, and a gradient for edge transition
 float scissorMask(vec2 p) {
     // Early exit if scissoring is disabled (when scissorExt.x is negative or zero)
-    if(ScissorExt.x <= 0.0) return 0.5;
+    if(ScissorExt.x <= 0.0) return 1.0;
     
     // Transform point to scissor space
     vec2 transformedPoint = (ScissorMat * vec4(p, 0.0, 1.0)).xy;
     
     // Calculate signed distance from scissor edges (negative inside, positive outside)
     vec2 distanceFromEdges = abs(transformedPoint) - ScissorExt;
+    
+    // Apply offset for smooth edge transition (0.5 creates half-pixel anti-aliased edges)
+    vec2 smoothEdges = vec2(0.5, 0.5) - distanceFromEdges;
+    
+    // Clamp each component and multiply to get final mask value
+    // Result is 1.0 inside, 0.0 outside, with smooth transition at edges
+    return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
+}
+
+
+// Determines whether a point is within the scissor region and returns the appropriate mask value
+// p: The point to test against the scissor region
+// Returns: 1.0 for points fully inside, 0.0 for points fully outside, and a gradient for edge transition
+float scissorMaskA(vec2 p) {
+    // Early exit if scissoring is disabled (when scissorExt.x is negative or zero)
+    if(ScissorExt.x <= 0.0) return 0.5;
+    
+    // Transform point to scissor space
+    vec2 transformedPoint = (vec4(p, 0.0, 1.0)).xy;
+    
+    // Calculate signed distance from scissor edges (negative inside, positive outside)
+    vec2 distanceFromEdges = abs(transformedPoint) - ScissorExt;
+    
+    // Apply offset for smooth edge transition (0.5 creates half-pixel anti-aliased edges)
+    vec2 smoothEdges = vec2(0.5, 0.5) - distanceFromEdges;
+    
+    // Clamp each component and multiply to get final mask value
+    // Result is 1.0 inside, 0.0 outside, with smooth transition at edges
+    return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
+}
+
+float scissorMaskB(vec2 p) {
+    //return 1.0;
+    // Early exit if scissoring is disabled (when scissorExt.x is negative or zero)
+    if(ScissorExt.x <= 0.0) return 1.0;
+    
+    // Transform point to scissor space
+    vec2 transformedPoint = (ScissorMat * vec4(p, 0.0, 1.0)).xy;
+    
+    // Calculate signed distance from scissor edges (negative inside, positive outside)
+    vec2 distanceFromEdges = abs(transformedPoint) - ScissorExt;
+    
+    // Apply offset for smooth edge transition (0.5 creates half-pixel anti-aliased edges)
+    vec2 smoothEdges = vec2(0.5, 0.5) - distanceFromEdges;
+    
+    // Clamp each component and multiply to get final mask value
+    // Result is 1.0 inside, 0.0 outside, with smooth transition at edges
+    return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
+}
+
+float scissorMaskC(vec2 p) {
+    // Early exit if scissoring is disabled (when scissorExt.x is negative or zero)
+    if(ScissorExt.x <= 0.0) return 1.0;
+    
+    // Transform point to scissor space
+    vec2 transformedPoint = (ScissorMat * vec4(p, 0.0, 1.0)).xy;
+    // Work in screen space directly
+    vec2 distanceFromEdges = max(vec2(0.0) - transformedPoint,  // Distance from min (0,0)
+                                transformedPoint - ScissorExt);   // Distance from max (width,height)
     
     // Apply offset for smooth edge transition (0.5 creates half-pixel anti-aliased edges)
     vec2 smoothEdges = vec2(0.5, 0.5) - distanceFromEdges;
@@ -120,5 +179,6 @@ void main()
     color *= texColor;
     color *= edgeAlpha * mask;
     fsout_Color = color;
-    fsout_Color = vec4(mask,mask,mask,1);
+    //fsout_Color = vec4(color.a,color.a,color.a,255);
+    //fsout_Color = vec4(mask,mask,mask,1);
 }

@@ -58,7 +58,7 @@ namespace VeldridSample
                 fontSystem.AddFont(stream);
             }
 
-            var font = fontSystem.GetFont(24); // Get the default font at size 16
+            var font = fontSystem.GetFont(56); // Get the default font at size 16
 
             while (veldridGUIRenderer.Window.Exists)
             {
@@ -81,9 +81,9 @@ namespace VeldridSample
         public static void RenderPaper(VeldridGUIRenderer renderer, SpriteFontBase font, double deltaTime)
         {
             // Begin the UI frame with deltaTime
-            Paper.BeginFrame(deltaTime, new Vector2(renderer.DPIScale,renderer.DPIScale));
+            Paper.BeginFrame(deltaTime);//, new Vector2(renderer.DPIScale,renderer.DPIScale));
 
-            PaperDemo.RenderUI();
+            //PaperDemo.RenderUI();
             // Define your UI
 
             // Main content
@@ -94,7 +94,34 @@ namespace VeldridSample
 
             //Paper.Box("MainContent").BackgroundColor(System.Drawing.Color.FromArgb(220, 220, 220));//(System.Drawing.Color.FromArgb(val, val, val));
 
+            /*// Upgrade box
+            using (Paper.Box("UpgradeBox")
+                .Margin(15)
+                .Height(Paper.Auto)
+                .Rounded(8)
+                .BackgroundColor(Color.FromArgb(132,132,132))
+                .AspectRatio(0.5f)
+                .Enter())
+            {
+            }*/
 
+            using (Paper.Box("MainBox")
+                .Margin(5)
+                .BackgroundColor(Color.FromArgb(112, 112, 112))
+                .Enter())
+            {
+                using (Paper.Box("UpgradeContent2")
+                .Height(17)
+                .BackgroundColor(Color.FromArgb(52, 52, 52))
+                .PositionType(PositionType.SelfDirected)
+                .Top(300)
+                .Clip()
+                .Enter())
+                {
+                    Paper.Box("UpgradeText")
+                    .Text(Text.Center("Upgrade to Pro", font, Color.White));
+                }
+            }
 
             /*using (Paper.Column("MainContainer")
                 .BackgroundColor(System.Drawing.Color.FromArgb(240, 240, 240))

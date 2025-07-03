@@ -1,6 +1,12 @@
-﻿using OpenTK.Graphics.OpenGL;
+﻿using System.Drawing;
+using System.Reflection;
+
+using FontStashSharp;
+
+using OpenTK.Graphics.OpenGL;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
+
 using Prowl.PaperUI;
 
 namespace OpenTKSample
@@ -8,6 +14,8 @@ namespace OpenTKSample
     public class PaperTKWindow : GameWindow
     {
         private PaperRenderer _renderer;
+
+        private DynamicSpriteFont font;
 
         public PaperTKWindow(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings)
         {
@@ -19,6 +27,19 @@ namespace OpenTKSample
             _renderer = new PaperRenderer();
             _renderer.Initialize(ClientRectangle.Size.X, ClientRectangle.Size.Y);
             Shared.PaperDemo.Initialize();
+
+
+            var fontSystem = new FontSystem();
+            // Load fonts with different sizes
+            /*var assembly = Assembly.GetExecutingAssembly();
+            using (Stream? stream = assembly.GetManifestResourceStream("Shared.EmbeddedResources.font.ttf"))
+            {
+                if (stream == null) throw new Exception("Could not load font resource");
+                fontSystem.AddFont(stream);
+            }*/
+
+            font = Shared.PaperDemo.fontSystem.GetFont(56); // Get th
+
             Paper.Initialize(_renderer, ClientRectangle.Size.X, ClientRectangle.Size.Y);
         }
 
@@ -31,7 +52,25 @@ namespace OpenTKSample
 
             Paper.BeginFrame((float)args.Time);
 
-            Shared.PaperDemo.RenderUI();
+
+            using (Paper.Box("MainBox")
+                .Margin(5)
+                .BackgroundColor(Color.FromArgb(112, 112, 112))
+                .Enter())
+            {
+                using (Paper.Box("UpgradeContent2")
+                .Height(17)
+                .BackgroundColor(Color.FromArgb(52, 52, 52))
+                .PositionType(PositionType.SelfDirected)
+                .Top(300)
+                .Clip()
+                .Enter())
+                {
+                    Paper.Box("UpgradeText")
+                    .Text(Text.Center("Upgrade to Pro", font, Color.White));
+                }
+            }
+            //Shared.PaperDemo.RenderUI();
 
             Paper.EndFrame();
 
