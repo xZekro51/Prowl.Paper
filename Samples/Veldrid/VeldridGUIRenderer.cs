@@ -68,13 +68,6 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         public RgbaFloat Color;
         public const uint SizeInBytes = 48; // 8 + 8 + 16 bytes
     }
-    private struct ScissorBuffer
-    {
-        public Matrix4x4 ScissorMat;
-        public Vector2 ScissorExt;
-        public int Padding;
-        public const uint SizeInBytes = 160; // 64 + 16 + 16 bytes
-    }
 
     private struct BrushBuffer
     {
@@ -296,6 +289,8 @@ internal class VeldridGUIRenderer : ICanvasRenderer
     {
         if (OnWindowResized != null)
             OnWindowResized();
+
+        _graphicsDevice.ResizeMainWindow((uint)_window.Width, (uint)_window.Height);
     }
 
     public object CreateTexture(uint width, uint height)
@@ -591,6 +586,8 @@ internal class VeldridGUIRenderer : ICanvasRenderer
                 uint width = (uint)(extent.x * 2);
                 uint height = (uint)(extent.y * 2);
 
+                //Console.WriteLine($"SCISSOR: [{x};{y}   -   {width}x{height}]");
+
                 _commandList.SetScissorRect(0,
                     x, y,
                     width, height);
@@ -641,9 +638,9 @@ internal class VeldridGUIRenderer : ICanvasRenderer
 
             // Dispose temporary resource set
             resourceSet.Dispose();
-            //drawCallsCount++;
-            //if (drawCallsCount >= 21)
-            //    break;
+            drawCallsCount++;
+            if (drawCallsCount >= 5)
+                break;
         }
 
         _commandList.End();

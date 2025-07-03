@@ -28,6 +28,7 @@ float calculateBrushFactor() {
 
     // Linear brush
     if (BrushType == 1) {
+        return 1.0;
         vec2 startPoint = BrushParams.xy;
         vec2 endPoint = BrushParams.zw;
         vec2 line = endPoint - startPoint;
@@ -81,12 +82,13 @@ void main()
 
     // Apply brush if active
     if (BrushType > 0) {
-        float factor = calculateBrushFactor();
-        color = mix(BrushColor1, BrushColor2, factor);
+        //float factor = calculateBrushFactor();
+        //color = mix(BrushColor1, BrushColor2, factor);
+        color = vec4(255,255,255,255);
     }
     
     vec4 texColor = texture(sampler2D(Texture, Sampler), fsin_TexCoord);
-    color *= texColor;
-    color *= edgeAlpha;
+    //color *= texColor;
+    //color *= edgeAlpha;
     fsout_Color = color;
 }
