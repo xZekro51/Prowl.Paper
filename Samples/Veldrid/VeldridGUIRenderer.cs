@@ -97,7 +97,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         public const uint SizeInBytes = 64; // 4x4 matrix = 64 bytes
     }
 
-    private const string BASE_VertexCode = @"
+    /*private const string BASE_VertexCode = @"
     #version 450
 
     layout(location = 0) in vec2 Position;
@@ -233,7 +233,7 @@ internal class VeldridGUIRenderer : ICanvasRenderer
         color *= edgeAlpha * mask;
         fsout_Color = color;
     }";
-
+    */
 
     protected readonly string VertexCode;
     protected readonly string FragmentCode;
