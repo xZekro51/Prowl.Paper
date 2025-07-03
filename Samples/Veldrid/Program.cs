@@ -42,6 +42,8 @@ namespace VeldridSample
             var veldridGUIRenderer = new VeldridGUIRenderer(1080, 850);
             Paper.Initialize(veldridGUIRenderer, veldridGUIRenderer.Window.Width, veldridGUIRenderer.Window.Height);
 
+            veldridGUIRenderer.OnWindowResized += () => Paper.SetResolution(veldridGUIRenderer.Window.Width, veldridGUIRenderer.Window.Height);
+
             PaperDemo.Initialize();
 
             _stopwatch.Start();
