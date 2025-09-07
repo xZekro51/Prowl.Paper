@@ -1,4 +1,6 @@
-﻿namespace Prowl.PaperUI
+﻿using System.Drawing;
+
+namespace Prowl.PaperUI
 {
     /// <summary>
     /// Defines the direction in which elements are arranged in a layout container.
@@ -56,6 +58,21 @@
         /// Size is determined automatically based on content or other constraints.
         /// </summary>
         Auto
+    }
+
+    public enum TextAlignment
+    {
+        Left,
+        Center,
+        Right,
+
+        MiddleLeft,
+        MiddleCenter,
+        MiddleRight,
+
+        BottomLeft,
+        BottomCenter,
+        BottomRight,
     }
 
     /// <summary>
@@ -159,9 +176,6 @@
     //    Nearest = 1 << 5,
     //}
 
-    public enum TextHorizontalAlignment { Left, Center, Right }
-    public enum TextVerticalAlignment { Top, Center, Bottom }
-
 
     /// <summary>
     /// Defines scroll options for elements.
@@ -186,5 +200,28 @@
 
         /// <summary>Completely hides scrollbars but still allows scrolling.</summary>
         Hidden = 1 << 3
+    }
+
+    public enum GradientType
+    {
+        None = 0,
+        Linear = 1,
+        Radial = 2,
+        Box = 3
+    }
+
+    /// <summary>
+    /// Defines rendering and interaction layers for elements.
+    /// </summary>
+    public enum Layer
+    {
+        /// <summary>Default layer rendered first.</summary>
+        Base = 0,
+
+        /// <summary>Rendered above the base layer.</summary>
+        Overlay = 1,
+
+        /// <summary>Topmost layer rendered last.</summary>
+        Topmost = 2
     }
 }

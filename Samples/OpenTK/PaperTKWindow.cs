@@ -14,6 +14,7 @@ namespace OpenTKSample
     public class PaperTKWindow : GameWindow
     {
         private PaperRenderer _renderer;
+        private Paper P;
 
         private DynamicSpriteFont font;
 
@@ -26,21 +27,8 @@ namespace OpenTKSample
             base.OnLoad();
             _renderer = new PaperRenderer();
             _renderer.Initialize(ClientRectangle.Size.X, ClientRectangle.Size.Y);
-            Shared.PaperDemo.Initialize();
-
-
-            var fontSystem = new FontSystem();
-            // Load fonts with different sizes
-            /*var assembly = Assembly.GetExecutingAssembly();
-            using (Stream? stream = assembly.GetManifestResourceStream("Shared.EmbeddedResources.font.ttf"))
-            {
-                if (stream == null) throw new Exception("Could not load font resource");
-                fontSystem.AddFont(stream);
-            }*/
-
-            font = Shared.PaperDemo.fontSystem.GetFont(56); // Get th
-
-            Paper.Initialize(_renderer, ClientRectangle.Size.X, ClientRectangle.Size.Y);
+            P = new Paper(_renderer, ClientRectangle.Size.X, ClientRectangle.Size.Y, new Prowl.Quill.FontAtlasSettings());
+            Shared.PaperDemo.Initialize(P);
         }
 
         protected override void OnRenderFrame(FrameEventArgs args)
@@ -50,7 +38,7 @@ namespace OpenTKSample
             GL.ClearColor(0.3f, 0.3f, 0.32f, 1.0f);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit | ClearBufferMask.StencilBufferBit);
 
-            Paper.BeginFrame((float)args.Time);
+            P.BeginFrame((float)args.Time);
 
 
             using (Paper.Box("MainBox")
@@ -72,7 +60,7 @@ namespace OpenTKSample
             }
             //Shared.PaperDemo.RenderUI();
 
-            Paper.EndFrame();
+            P.EndFrame();
 
             SwapBuffers();
         }
@@ -83,7 +71,7 @@ namespace OpenTKSample
 
             GL.Viewport(0, 0, ClientRectangle.Size.X, ClientRectangle.Size.Y);
 
-            Paper.SetResolution(ClientRectangle.Size.X, ClientRectangle.Size.Y);
+            P.SetResolution(ClientRectangle.Size.X, ClientRectangle.Size.Y);
             _renderer.UpdateProjection(ClientRectangle.Size.X, ClientRectangle.Size.Y);
         }
 
@@ -91,44 +79,44 @@ namespace OpenTKSample
         {
             base.OnMouseDown(e);
             PaperMouseBtn button = TranslateMouseButton(e.Button);
-            Paper.SetPointerState(button, MouseState.X, MouseState.Y, true, false);
+            P.SetPointerState(button, MouseState.X, MouseState.Y, true, false);
         }
 
         protected override void OnMouseUp(MouseButtonEventArgs e)
         {
             base.OnMouseUp(e);
             PaperMouseBtn button = TranslateMouseButton(e.Button);
-            Paper.SetPointerState(button, MouseState.X, MouseState.Y, false, false);
+            P.SetPointerState(button, MouseState.X, MouseState.Y, false, false);
         }
 
         protected override void OnMouseWheel(MouseWheelEventArgs e)
         {
             base.OnMouseWheel(e);
-            Paper.SetPointerWheel(e.OffsetY);
+            P.SetPointerWheel(e.OffsetY);
         }
 
         protected override void OnMouseMove(MouseMoveEventArgs e)
         {
             base.OnMouseMove(e);
-            Paper.SetPointerState(PaperMouseBtn.Unknown, MouseState.X, MouseState.Y, false, true);
+            P.SetPointerState(PaperMouseBtn.Unknown, MouseState.X, MouseState.Y, false, true);
         }
 
         protected override void OnKeyDown(KeyboardKeyEventArgs e)
         {
             base.OnKeyDown(e);
-            Paper.SetKeyState(TranslateKey(e.Key), true);
+            P.SetKeyState(TranslateKey(e.Key), true);
         }
 
         protected override void OnKeyUp(KeyboardKeyEventArgs e)
         {
             base.OnKeyUp(e);
-            Paper.SetKeyState(TranslateKey(e.Key), false);
+            P.SetKeyState(TranslateKey(e.Key), false);
         }
 
         protected override void OnTextInput(TextInputEventArgs e)
         {
             base.OnTextInput(e);
-            Paper.AddInputCharacter(e.AsString);
+            P.AddInputCharacter(e.AsString);
         }
 
         private PaperMouseBtn TranslateMouseButton(OpenTK.Windowing.GraphicsLibraryFramework.MouseButton button)
