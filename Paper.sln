@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.8.34227.203
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11626.88 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenTKSample", "Samples\OpenTK\OpenTKSample.csproj", "{38341843-AB82-46B8-A724-A3207F94CAAB}"
 EndProject
@@ -79,6 +79,18 @@ Global
 		{81493B71-1E37-4208-8B76-310CE13E4335}.Release|x64.Build.0 = Release|Any CPU
 		{81493B71-1E37-4208-8B76-310CE13E4335}.Release|x86.ActiveCfg = Release|Any CPU
 		{81493B71-1E37-4208-8B76-310CE13E4335}.Release|x86.Build.0 = Release|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Debug|x64.Build.0 = Debug|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Debug|x86.Build.0 = Debug|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Release|x64.ActiveCfg = Release|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Release|x64.Build.0 = Release|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Release|x86.ActiveCfg = Release|Any CPU
+		{A524AE83-BEFC-B5C4-4CC3-AD778D74EE39}.Release|x86.Build.0 = Release|Any CPU
 		{D9BA596C-4152-4D83-A509-B0D20ACB0AA0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D9BA596C-4152-4D83-A509-B0D20ACB0AA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D9BA596C-4152-4D83-A509-B0D20ACB0AA0}.Debug|x64.ActiveCfg = Debug|Any CPU
