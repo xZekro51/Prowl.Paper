@@ -1,13 +1,16 @@
+using System;
+using System.Collections.Generic;
 using Prowl.PaperUI.Events;
 using Prowl.Quill;
 using Prowl.Scribe;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
     public struct ElementData
     {
-        public ulong ID;
+        public int ID;
 
         // Events
         public bool IsFocusable;
@@ -37,19 +40,17 @@ namespace Prowl.PaperUI.LayoutEngine
 
         public Action<ElementHandle, Rect> OnPostLayout;
 
-        public Scroll ScrollFlags;
-        public Action<Canvas, Rect, ScrollState> CustomScrollbarRenderer;
 
         // Hierarchy
         public int ParentIndex;
         public List<int> ChildIndices;
-        
+
         // Interaction hooking - whether this element inherits parent's interaction state
         public bool IsHookedToParent;
-        
+
         // Interaction hooking - whether this element has hooked children (optimization flag)
         public bool IsAHookedParent;
-        
+
         // Tab navigation - element's position in tab order (-1 means not focusable via tab)
         public int TabIndex;
 
@@ -72,31 +73,33 @@ namespace Prowl.PaperUI.LayoutEngine
         public TextAlignment TextAlignment;
 
         // Cached text layout objects
-        internal object _quillMarkdown;
+        internal Quill.Canvas.QuillMarkdown? _quillMarkdown;
         internal TextLayout _textLayout;
 
         // Rendering
         internal List<ElementRenderCommand> _renderCommands;
+        internal List<ElementRenderCommand> _foregroundRenderCommands;
         internal ElementStyle _elementStyle;
         internal bool _scissorEnabled;
+        internal bool _clampToScreen;
 
         public Layer Layer;
 
         // Layout results
         public bool ProcessedText;
-        public double X;
-        public double Y;
-        public double LayoutWidth;
-        public double LayoutHeight;
-        public double RelativeX;
-        public double RelativeY;
+        public float X;
+        public float Y;
+        public float LayoutWidth;
+        public float LayoutHeight;
+        public float RelativeX;
+        public float RelativeY;
 
         // Content sizing for auto-sized elements
-        public Func<double?, double?, (double, double)?> ContentSizer;
+        public Func<float?, float?, (float, float)?> ContentSizer;
 
-        public readonly Rect LayoutRect => new Rect(X, Y, LayoutWidth, LayoutHeight);
+        public readonly Rect LayoutRect => new Rect(X, Y, X + LayoutWidth, Y + LayoutHeight);
 
-        public static ElementData Create(ulong id)
+        public static ElementData Create(int id)
         {
             return new ElementData
             {
@@ -121,11 +124,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 _quillMarkdown = null,
                 _textLayout = null,
                 _renderCommands = null,
+                _foregroundRenderCommands = null,
                 _elementStyle = new ElementStyle(),
                 _scissorEnabled = false,
+                _clampToScreen = false,
                 Layer = Layer.Base,
                 ProcessedText = false,
-                ScrollFlags = Scroll.None
             };
         }
     }

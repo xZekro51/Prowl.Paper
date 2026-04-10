@@ -1,12 +1,16 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
 using Prowl.Scribe;
+using Prowl.Vector.Geometry;
+using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI
 {
@@ -17,30 +21,39 @@ namespace Prowl.PaperUI
         // Layout and hierarchy management
         private ElementHandle _rootElementHandle;
         internal Stack<ElementHandle> _elementStack = new Stack<ElementHandle>();
-        private readonly Stack<ulong> _IDStack = new();
-        private readonly HashSet<ulong> _createdElements = [];
+        private readonly Stack<int> _IDStack = new Stack<int>();
+        private readonly HashSet<int> _createdElements = new HashSet<int>();
 
-        private readonly Dictionary<ulong, Hashtable> _storage = [];
+        private readonly Dictionary<int, Hashtable> _storage = new Dictionary<int, Hashtable>();
 
         // Rendering context
         private Canvas _canvas;
         private ICanvasRenderer _renderer;
-        private double _width;
-        private double _height;
-        private Stopwatch _timer = new();
+        private float _width;
+        private float _height;
+        private float _dpiScale = 1.0f;
+        private Stopwatch _timer = new Stopwatch();
 
         // Events
         public Action? OnEndOfFramePreLayout = null;
         public Action? OnEndOfFramePostLayout = null;
 
         // Performance metrics
-        public double MillisecondsSpent { get; private set; }
+        public float MillisecondsSpent { get; private set; }
         public uint CountOfAllElements { get; private set; }
 
         // Public properties
         public Rect ScreenRect => new Rect(0, 0, _width, _height);
         public ElementHandle RootElement => _rootElementHandle;
         public Canvas Canvas => _canvas;
+        public ICanvasRenderer Renderer => _renderer;
+
+        /// <summary>
+        /// Gets the current DPI scale factor.
+        /// Host applications should divide raw input coordinates by this value
+        /// before passing them to Paper's input methods.
+        /// </summary>
+        public float DpiScale => _dpiScale;
 
         /// <summary>
         /// Gets the current parent element in the element hierarchy.
@@ -58,7 +71,7 @@ namespace Prowl.PaperUI
         /// <param name="width">Viewport width</param>
         /// <param name="height">Viewport height</param>
         /// <param name="fontAtlas">Font atlas settings for text rendering</param>
-        public Paper(ICanvasRenderer renderer, double width, double height, FontAtlasSettings fontAtlas)
+        public Paper(ICanvasRenderer renderer, float width, float height, FontAtlasSettings fontAtlas)
         {
             _width = width;
             _height = height;
@@ -86,7 +99,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Updates the viewport resolution.
         /// </summary>
-        public void SetResolution(double width, double height)
+        public void SetResolution(float width, float height)
         {
             _width = width;
             _height = height;
@@ -96,9 +109,20 @@ namespace Prowl.PaperUI
 
         public IEnumerable<FontFile> EnumerateSystemFonts() => _canvas.EnumerateSystemFonts();
 
-        public Prowl.Vector.Vector2 MeasureText(string text, double pixelSize, FontFile font, double letterSpacing = 0.0) => _canvas.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
+        /// <summary>
+        /// Gets or sets the text rendering mode.
+        /// Slug mode evaluates glyph curves directly on the GPU for scale-independent text.
+        /// Falls back to Bitmap if the backend does not support float textures.
+        /// </summary>
+        public TextRenderMode TextMode
+        {
+            get => _canvas.TextMode;
+            set => _canvas.TextMode = value;
+        }
 
-        public Prowl.Vector.Vector2 MeasureText(string text, TextLayoutSettings settings) => _canvas.MeasureText(text, settings);
+        public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0.0f) => _canvas.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
+
+        public Float2 MeasureText(string text, TextLayoutSettings settings) => _canvas.MeasureText(text, settings);
 
         public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _canvas.CreateLayout(text, settings);
 
@@ -106,9 +130,10 @@ namespace Prowl.PaperUI
         /// Begins a new UI frame, resetting the element hierarchy.
         /// </summary>
         /// <param name="deltaTime">Time elapsed since the last frame</param>
-        /// <param name="frameBufferScale">Optional framebuffer scaling factor</param>
-        public void BeginFrame(double deltaTime, Vector2? frameBufferScale = null)
+        /// <param name="dpiScale">Device pixel ratio (1.0 = standard, 2.0 = HiDPI/Retina). Can change per-frame if the window moves between monitors.</param>
+        public void BeginFrame(float deltaTime, float dpiScale = 1.0f)
         {
+            _dpiScale = dpiScale > 0 ? dpiScale : 1.0f;
             _timer.Restart();
             SetTime(deltaTime);
 
@@ -125,10 +150,9 @@ namespace Prowl.PaperUI
             _IDStack.Push(0);
             _createdElements.Clear();
 
-            // Reset Canvas
-            _canvas.Clear();
+            _canvas.BeginFrame(_width, _height, _dpiScale);
 
-            StartInputFrame(frameBufferScale ?? new Vector2(1, 1));
+            StartInputFrame();
         }
 
         /// <summary>
@@ -147,6 +171,10 @@ namespace Prowl.PaperUI
             // Post-layout callbacks
             CallPostLayoutRecursive(RootElement);
 
+            // Collect layered elements for independent hit testing
+            _layeredElements.Clear();
+            CollectLayeredElements(_rootElementHandle, Transform2D.Identity);
+
             // Reset rendering state
             _canvas.ResetState();
 
@@ -154,13 +182,25 @@ namespace Prowl.PaperUI
             HandleInteractions();
 
             // Render all elements
-            List<ElementHandle> overlayElements = new();
-            List<ElementHandle> modalElements = new();
+            // Deferred elements capture the canvas transform at collection time
+            // so they render at the correct position even though they draw later.
+            List<(ElementHandle handle, Transform2D transform)> overlayElements = new List<(ElementHandle handle, Transform2D transform)>();
+            List<(ElementHandle handle, Transform2D transform)> modalElements = new List<(ElementHandle handle, Transform2D transform)>();
             RenderElement(_rootElementHandle, Layer.Base, overlayElements, modalElements);
-            foreach (var overlay in overlayElements)
-                RenderElement(overlay, Layer.Overlay, null, modalElements);
-            foreach (var modal in modalElements)
-                RenderElement(modal, Layer.Topmost, null, null);
+            foreach (var (handle, transform) in overlayElements)
+            {
+                _canvas.SaveState();
+                _canvas.CurrentTransform(transform);
+                RenderElement(handle, Layer.Overlay, null, modalElements);
+                _canvas.RestoreState();
+            }
+            foreach (var (handle, transform) in modalElements)
+            {
+                _canvas.SaveState();
+                _canvas.CurrentTransform(transform);
+                RenderElement(handle, Layer.Topmost, null, null);
+                _canvas.RestoreState();
+            }
 
             // Update stats
             CountOfAllElements = (uint)_createdElements.Count;
@@ -175,7 +215,7 @@ namespace Prowl.PaperUI
 
             // Performance measurement
             _timer.Stop();
-            MillisecondsSpent = _timer.Elapsed.TotalMilliseconds;
+            MillisecondsSpent = (float)_timer.Elapsed.TotalMilliseconds;
         }
 
         /// <summary>
@@ -188,7 +228,7 @@ namespace Prowl.PaperUI
             _elementStack.Push(handle);
             try
             {
-                handle.Data.OnPostLayout?.Invoke(handle, new Rect(handle.Data.X, handle.Data.Y, handle.Data.LayoutWidth, handle.Data.LayoutHeight));
+                handle.Data.OnPostLayout?.Invoke(handle, new Rect(handle.Data.X, handle.Data.Y, handle.Data.X + handle.Data.LayoutWidth, handle.Data.Y + handle.Data.LayoutHeight));
                 for (int i = 0; i < handle.Data.ChildIndices.Count; i++)
                 {
                     var child = new ElementHandle(this, handle.Data.ChildIndices[i]);
@@ -208,7 +248,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Renders an element and its children recursively with layering support.
         /// </summary>
-        private void RenderElement(in ElementHandle handle, Layer currentLayer, List<ElementHandle>? overlayElements, List<ElementHandle>? modalElements)
+        private void RenderElement(in ElementHandle handle, Layer currentLayer, List<(ElementHandle, Transform2D)>? overlayElements, List<(ElementHandle, Transform2D)>? modalElements)
         {
             ref var data = ref handle.Data;
 
@@ -219,12 +259,12 @@ namespace Prowl.PaperUI
             {
                 if (data.Layer == Layer.Overlay)
                 {
-                    overlayElements?.Add(handle);
+                    overlayElements?.Add((handle, _canvas.GetTransform()));
                     return;
                 }
                 else if (data.Layer == Layer.Topmost)
                 {
-                    modalElements?.Add(handle);
+                    modalElements?.Add((handle, _canvas.GetTransform()));
                     return;
                 }
             }
@@ -232,12 +272,12 @@ namespace Prowl.PaperUI
             {
                 if (data.Layer == Layer.Topmost)
                 {
-                    modalElements?.Add(handle);
+                    modalElements?.Add((handle, _canvas.GetTransform()));
                     return;
                 }
             }
 
-            var rect = new Rect(data.X, data.Y, data.LayoutWidth, data.LayoutHeight);
+            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
             _canvas.SaveState();
 
             // Apply element transform
@@ -245,16 +285,17 @@ namespace Prowl.PaperUI
             _canvas.TransformBy(styleTransform);
 
             // Draw box shadow before background
-            var rounded = (Vector4)data._elementStyle.GetValue(GuiProp.Rounded);
+            var rounded = (Float4)data._elementStyle.GetValue(GuiProp.Rounded);
+            bool hasRounding = rounded.X > 0 || rounded.Y > 0 || rounded.Z > 0 || rounded.W > 0;
             var boxShadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
             if (boxShadow.IsVisible)
             {
-                double buffer = boxShadow.Blur * 0.5;
-                double sx = rect.x + boxShadow.OffsetX - buffer - boxShadow.Spread;
-                double sy = rect.y + boxShadow.OffsetY - buffer - boxShadow.Spread;
-                double sw = rect.width + (buffer * 2) + (boxShadow.Spread * 2);
-                double sh = rect.height + (buffer * 2) + (boxShadow.Spread * 2);
-                float radi = (float)(Math.Max(Math.Max(rounded.x, rounded.y), Math.Max(rounded.z, rounded.w)));
+                float buffer = boxShadow.Blur * 0.5f;
+                float sx = rect.Min.X + boxShadow.OffsetX - buffer - boxShadow.Spread;
+                float sy = rect.Min.Y + boxShadow.OffsetY - buffer - boxShadow.Spread;
+                float sw = rect.Size.X + (buffer * 2) + (boxShadow.Spread * 2);
+                float sh = rect.Size.Y + (buffer * 2) + (boxShadow.Spread * 2);
+                float radi = (float)(Maths.Max(Maths.Max(rounded.X, rounded.Y), Maths.Max(rounded.Z, rounded.W)));
                 _canvas.SetBoxBrush(
                     sx + sw / 2,
                     sy + sh / 2,
@@ -263,18 +304,18 @@ namespace Prowl.PaperUI
                     radi,
                     (float)boxShadow.Blur,
                     boxShadow.Color,
-                    Color.FromArgb(0, boxShadow.Color));
+                    Color32.FromArgb(0, boxShadow.Color));
 
-                buffer = (boxShadow.Blur) * 1.0;
-                sx = rect.x + boxShadow.OffsetX - buffer - boxShadow.Spread;
-                sy = rect.y + boxShadow.OffsetY - buffer - boxShadow.Spread;
-                sw = rect.width + (buffer * 2) + (boxShadow.Spread * 2);
-                sh = rect.height + (buffer * 2) + (boxShadow.Spread * 2);
+                buffer = (boxShadow.Blur) * 1.0f;
+                sx = rect.Min.X + boxShadow.OffsetX - buffer - boxShadow.Spread;
+                sy = rect.Min.Y + boxShadow.OffsetY - buffer - boxShadow.Spread;
+                sw = rect.Size.X + (buffer * 2) + (boxShadow.Spread * 2);
+                sh = rect.Size.Y + (buffer * 2) + (boxShadow.Spread * 2);
 
                 _canvas.RoundedRectFilled(sx, sy, sw, sh,
-                    rounded.x, rounded.y,
-                    rounded.z, rounded.w,
-                    Color.White);
+                    rounded.X, rounded.Y,
+                    rounded.Z, rounded.W,
+                    Prowl.Vector.Color.White);
 
                 _canvas.ClearBrush();
             }
@@ -286,46 +327,68 @@ namespace Prowl.PaperUI
                 switch (gradient.Type)
                 {
                     case GradientType.Linear:
-                        double lx1 = rect.x + gradient.X1 * rect.width;
-                        double ly1 = rect.y + gradient.Y1 * rect.height;
-                        double lx2 = rect.x + gradient.X2 * rect.width;
-                        double ly2 = rect.y + gradient.Y2 * rect.height;
+                        float lx1 = rect.Min.X + gradient.X1 * rect.Size.X;
+                        float ly1 = rect.Min.Y + gradient.Y1 * rect.Size.Y;
+                        float lx2 = rect.Min.X + gradient.X2 * rect.Size.X;
+                        float ly2 = rect.Min.Y + gradient.Y2 * rect.Size.Y;
                         _canvas.SetLinearBrush(lx1, ly1, lx2, ly2, gradient.Color1, gradient.Color2);
                         break;
                     case GradientType.Radial:
-                        double rcx = rect.x + gradient.X1 * rect.width;
-                        double rcy = rect.y + gradient.Y1 * rect.height;
-                        double ir = gradient.InnerRadius * Math.Min(rect.width, rect.height);
-                        double or = gradient.OuterRadius * Math.Min(rect.width, rect.height);
+                        float rcx = rect.Min.X + gradient.X1 * rect.Size.X;
+                        float rcy = rect.Min.Y + gradient.Y1 * rect.Size.Y;
+                        float ir = gradient.InnerRadius * Maths.Min(rect.Size.X, rect.Size.Y);
+                        float or = gradient.OuterRadius * Maths.Min(rect.Size.X, rect.Size.Y);
                         _canvas.SetRadialBrush(rcx, rcy, ir, or, gradient.Color1, gradient.Color2);
                         break;
                     case GradientType.Box:
-                        double bcx = rect.x + gradient.X1 * rect.width;
-                        double bcy = rect.y + gradient.Y1 * rect.height;
-                        double bw = gradient.Width * rect.width;
-                        double bh = gradient.Height * rect.height;
-                        float brad = gradient.Radius * (float)Math.Min(rect.width, rect.height);
-                        float bfeather = gradient.Feather * (float)Math.Min(rect.width, rect.height);
+                        float bcx = rect.Min.X + gradient.X1 * rect.Size.X;
+                        float bcy = rect.Min.Y + gradient.Y1 * rect.Size.Y;
+                        float bw = gradient.Width * rect.Size.X;
+                        float bh = gradient.Height * rect.Size.Y;
+                        float brad = gradient.Radius * (float)Maths.Min(rect.Size.X, rect.Size.Y);
+                        float bfeather = gradient.Feather * (float)Maths.Min(rect.Size.X, rect.Size.Y);
                         _canvas.SetBoxBrush(bcx, bcy, bw, bh, brad, bfeather, gradient.Color1, gradient.Color2);
                         break;
                 }
-                _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, Color.White);
+                if (hasRounding)
+                {
+                    _canvas.RoundedRectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, rounded.X, rounded.Y, rounded.Z, rounded.W, Color.White);
+                }
+                else
+                {
+                    _canvas.RectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, Color.White);
+                }
                 _canvas.ClearBrush();
             }
             else
             {
                 var backgroundColor = (Color)data._elementStyle.GetValue(GuiProp.BackgroundColor);
                 if (backgroundColor.A > 0)
-                    _canvas.RoundedRectFilled(rect.x, rect.y, rect.width, rect.height, rounded.x, rounded.y, rounded.z, rounded.w, backgroundColor);
+                {
+                    if (hasRounding)
+                        _canvas.RoundedRectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, rounded.X, rounded.Y, rounded.Z, rounded.W, backgroundColor);
+                    else
+                        _canvas.RectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, backgroundColor);
+                }
+            }
+
+            // Draw background image if set (rendered on top of background color/gradient)
+            var bgImage = data._elementStyle.GetValue(GuiProp.BackgroundImage);
+            if (bgImage != null)
+            {
+                _canvas.DrawImage(bgImage, rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
             }
 
             // Draw border if needed
             var borderColor = (Color)data._elementStyle.GetValue(GuiProp.BorderColor);
-            var borderWidth = (double)data._elementStyle.GetValue(GuiProp.BorderWidth);
+            var borderWidth = (float)data._elementStyle.GetValue(GuiProp.BorderWidth);
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
                 _canvas.BeginPath();
-                _canvas.RoundedRect(rect.x-1, rect.y-1, rect.width+1, rect.height+1, rounded.x, rounded.y, rounded.z, rounded.w);
+                if(hasRounding)
+                    _canvas.RoundedRect(rect.Min.X-1, rect.Min.Y-1, rect.Size.X+1, rect.Size.Y+1, rounded.X, rounded.Y, rounded.Z, rounded.W);
+                else
+                    _canvas.Rect(rect.Min.X-1, rect.Min.Y-1, rect.Size.X+1, rect.Size.Y+1);
                 _canvas.SetStrokeColor(borderColor);
                 _canvas.SetStrokeWidth(borderWidth);
                 _canvas.Stroke();
@@ -334,14 +397,14 @@ namespace Prowl.PaperUI
             // Apply scissor if enabled
             if (data._scissorEnabled)
             {
-                _canvas.IntersectScissor(rect.x, rect.y, rect.width, rect.height);
+                _canvas.IntersectScissor(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
             }
 
             // Draw text style
             if (!string.IsNullOrEmpty(data.Paragraph))
             {
                 _canvas.SaveState();
-                DrawText(handle, rect.x, rect.y, (float)rect.width, (float)rect.height);
+                DrawText(handle, rect.Min.X, rect.Min.Y, (float)rect.Size.X, (float)rect.Size.Y);
                 _canvas.RestoreState();
             }
 
@@ -365,17 +428,6 @@ namespace Prowl.PaperUI
                 }
             }
 
-            // Scrollbars offset the position of children
-            bool hasScrollState = this.HasElementStorage(handle, "ScrollState");
-            ScrollState scrollState = new();
-            if (hasScrollState)
-            {
-                _canvas.SaveState();
-                scrollState = this.GetElementStorage<ScrollState>(handle, "ScrollState");
-                var transform = Transform2D.CreateTranslation(-scrollState.Position);
-                _canvas.TransformBy(transform);
-            }
-
             // Draw children
             foreach (var childIndex in data.ChildIndices)
             {
@@ -383,32 +435,19 @@ namespace Prowl.PaperUI
                 RenderElement(child, currentLayer, overlayElements, modalElements);
             }
 
-            // Draw scrollbars if needed
-            if (hasScrollState)
+            // Process foreground render actions (after children)
+            if (data._foregroundRenderCommands != null)
             {
-                _canvas.RestoreState();
-
-                Scroll flags = data.ScrollFlags;
-                bool needsHorizontalScroll = scrollState.ContentSize.x > scrollState.ViewportSize.x && (flags & Scroll.ScrollX) != 0;
-                bool needsVerticalScroll = scrollState.ContentSize.y > scrollState.ViewportSize.y && (flags & Scroll.ScrollY) != 0;
-                bool shouldShowScrollbars = (flags & Scroll.Hidden) == 0 &&
-                                           (((flags & Scroll.AutoHide) == 0) || needsHorizontalScroll || needsVerticalScroll);
-
-                // Draw scrollbars if needed
-                if (shouldShowScrollbars)
+                foreach (var cmd in data._foregroundRenderCommands)
                 {
-                    // Check for custom scrollbar renderer
-                    var customRenderer = data.CustomScrollbarRenderer;
-
-                    if (customRenderer != null)
+                    _elementStack.Push(handle);
+                    try
                     {
-                        // Use custom renderer
-                        customRenderer(_canvas, rect, scrollState);
+                        cmd.RenderAction?.Invoke(_canvas, rect);
                     }
-                    else
+                    finally
                     {
-                        // Use default scrollbar rendering
-                        DrawDefaultScrollbars(_canvas, rect, scrollState, flags);
+                        _elementStack.Pop();
                     }
                 }
             }
@@ -416,7 +455,7 @@ namespace Prowl.PaperUI
             _canvas.RestoreState();
         }
 
-        private void DrawText(in ElementHandle handle, double x, double y, float availableWidth, float availableHeight)
+        private void DrawText(in ElementHandle handle, float x, float y, float availableWidth, float availableHeight)
         {
             if (string.IsNullOrWhiteSpace(handle.Data.Paragraph)) return;
 
@@ -425,26 +464,24 @@ namespace Prowl.PaperUI
 
             Canvas canvas = handle.Owner?.Canvas ?? throw new InvalidOperationException("Owner paper or canvas is not set.");
 
-            var color = (Color)handle.Data._elementStyle.GetValue(GuiProp.TextColor);
-
-            FontColor fs = new FontColor(color.R, color.G, color.B, color.A);
+            var color = (Color32)(Color)handle.Data._elementStyle.GetValue(GuiProp.TextColor);
 
             // Calculate vertical alignment offset
-            double yOffset = 0;
-            Vector2 textSize;
+            float yOffset = 0;
+            Float2 textSize;
 
             if (handle.Data.IsMarkdown == false)
             {
                 if (handle.Data._textLayout == null) throw new InvalidOperationException("Text layout is not processed.");
 
-                textSize = handle.Data._textLayout.Size;
+                textSize = (Float2)handle.Data._textLayout.Size;
             }
             else
             {
                 if (handle.Data._quillMarkdown == null) throw new InvalidOperationException("Markdown layout is not processed.");
 
-                var markdownResult = handle.Data._quillMarkdown as dynamic;
-                textSize = markdownResult?.Size ?? Vector2.zero;
+                var markdownResult = handle.Data._quillMarkdown;
+                textSize = markdownResult?.Size ?? Float2.Zero;
             }
 
             // Apply vertical alignment based on TextAlignment
@@ -453,13 +490,13 @@ namespace Prowl.PaperUI
                 case TextAlignment.MiddleLeft:
                 case TextAlignment.MiddleCenter:
                 case TextAlignment.MiddleRight:
-                    yOffset = (availableHeight - textSize.y) / 2.0;
+                    yOffset = (availableHeight - textSize.Y) / 2.0f;
                     break;
 
                 case TextAlignment.BottomLeft:
                 case TextAlignment.BottomCenter:
                 case TextAlignment.BottomRight:
-                    yOffset = availableHeight - textSize.y;
+                    yOffset = availableHeight - textSize.Y;
                     break;
 
                 case TextAlignment.Left:
@@ -471,57 +508,16 @@ namespace Prowl.PaperUI
             }
 
             // Apply the calculated offset to the y position
-            double finalY = y + yOffset;
+            float finalY = y + yOffset;
 
             if (handle.Data.IsMarkdown == false)
             {
-                canvas.DrawLayout(handle.Data._textLayout, x, finalY, fs);
+                canvas.DrawLayout(handle.Data._textLayout, x, finalY, color);
             }
             else
             {
-                var markdownResult = handle.Data._quillMarkdown as dynamic;
-                canvas.DrawMarkdown(markdownResult, new Vector2(x, finalY));
-            }
-        }
-
-        /// <summary>
-        /// Draws the default scrollbars for a scrollable element.
-        /// </summary>
-        private void DrawDefaultScrollbars(Canvas canvas, Rect rect, ScrollState state, Scroll flags)
-        {
-            // Calculate scrollbar positions and sizes
-            bool hasHorizontal = state.ContentSize.x > state.ViewportSize.x && (flags & Scroll.ScrollX) != 0;
-            bool hasVertical = state.ContentSize.y > state.ViewportSize.y && (flags & Scroll.ScrollY) != 0;
-
-            if (hasVertical)
-            {
-                var (trackX, trackY, trackWidth, trackHeight, thumbY, thumbHeight) = state.CalculateVerticalScrollbar(rect, flags);
-
-
-                // Draw vertical scrollbar track
-                canvas.RoundedRectFilled(trackX, trackY, trackWidth, trackHeight, 10, 10, 10, 10, Color.FromArgb(50, 0, 0, 0));
-
-                // Draw vertical scrollbar thumb - highlight if hovered or dragging
-                Color thumbColor = state.IsVerticalScrollbarHovered || state.IsDraggingVertical
-                    ? Color.FromArgb(220, 130, 130, 130)
-                    : Color.FromArgb(180, 100, 100, 100);
-
-                canvas.RoundedRectFilled(trackX + ScrollState.ScrollbarPadding, thumbY + ScrollState.ScrollbarPadding, trackWidth - ScrollState.ScrollbarPadding * 2, thumbHeight - ScrollState.ScrollbarPadding * 2, 10, 10, 10, 10, thumbColor);
-            }
-
-            if (hasHorizontal)
-            {
-                var (trackX, trackY, trackWidth, trackHeight, thumbX, thumbWidth) = state.CalculateHorizontalScrollbar(rect, flags);
-
-                // Draw horizontal scrollbar track
-                canvas.RoundedRectFilled(trackX, trackY, trackWidth, trackHeight, 10, 10, 10, 10, Color.FromArgb(50, 0, 0, 0));
-
-                // Draw horizontal scrollbar thumb - highlight if hovered or dragging
-                Color thumbColor = state.IsHorizontalScrollbarHovered || state.IsDraggingHorizontal
-                    ? Color.FromArgb(220, 130, 130, 130)
-                    : Color.FromArgb(180, 100, 100, 100);
-
-                canvas.RoundedRectFilled(thumbX + ScrollState.ScrollbarPadding, trackY + ScrollState.ScrollbarPadding, thumbWidth - ScrollState.ScrollbarPadding * 2, trackHeight - ScrollState.ScrollbarPadding * 2, 10, 10, 10, 10, thumbColor);
+                var markdownResult = handle.Data._quillMarkdown;
+                canvas.DrawMarkdown(markdownResult ?? new Canvas.QuillMarkdown(), new Float2(x, finalY));
             }
         }
 
@@ -534,7 +530,7 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="id">The ID to search for</param>
         /// <returns>The found element or null if not found</returns>
-        public ElementHandle FindElementByID(ulong id)
+        public ElementHandle FindElementByID(int id)
         {
             var handle = FindElementHandleByID(id);
             return handle;
@@ -544,24 +540,23 @@ namespace Prowl.PaperUI
         /// Creates a generic layout container.
         /// </summary>
         /// <param name="stringID">String identifier for the element</param>
-        /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+        /// <param name="intID">Integer identifier useful for when creating elements in loops</param>
+        /// <param name="lineID">Line number based identifier (auto-provided as Source Line Number)</param>
         /// <returns>A builder for configuring the element</returns>
-        public ElementBuilder Box(string stringID, [CallerLineNumber] int intID = 0)
+        public ElementBuilder Box(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
         {
-            ArgumentNullException.ThrowIfNull(stringID);
+            if (stringID == null)
+            {
+                throw new ArgumentException(nameof(stringID));
+            }
 
-            ulong storageHash = 0;
-            if(_IDStack.Count > 0)
-                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID);
-            else
-                storageHash = (ulong)HashCode.Combine(CurrentParent.Data.ID, stringID, intID);
+            int storageHash = HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID, lineID);
 
-            if (_createdElements.Contains(storageHash))
-                throw new Exception("Element already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + " Parent: " + CurrentParent.Data.ID + "\nPlease use a different ID.");
+            if (!_createdElements.Add(storageHash))
+                throw new Exception($"Element already exists with this ID: {stringID}:{intID}:{lineID} = {storageHash} Parent: {CurrentParent.Data.ID}\nPlease use a different ID.");
 
             var handle = CreateElement(storageHash);
             var builder = new ElementBuilder(this, handle);
-            _createdElements.Add(storageHash);
 
             AddChild(ref handle);
 
@@ -571,14 +566,14 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a row layout container (horizontal layout).
         /// </summary>
-        public ElementBuilder Row(string stringID, [CallerLineNumber] int intID = 0)
-            => Box(stringID, intID).LayoutType(LayoutType.Row);
+        public ElementBuilder Row(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
+            => Box(stringID, intID, lineID).LayoutType(LayoutType.Row);
 
         /// <summary>
         /// Creates a column layout container (vertical layout).
         /// </summary>
-        public ElementBuilder Column(string stringID, [CallerLineNumber] int intID = 0)
-            => Box(stringID, intID).LayoutType(LayoutType.Column);
+        public ElementBuilder Column(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
+            => Box(stringID, intID, lineID).LayoutType(LayoutType.Column);
 
         /// <summary>
         /// Moves the current parent element to the root of the hierarchy.
@@ -612,22 +607,47 @@ namespace Prowl.PaperUI
             CurrentParent.Data.ChildIndices.Add(handle.Index);
         }
 
-        public void AddActionElement(Action<Canvas, Rect> renderAction)
+        public void Draw(Action<Canvas, Rect> renderAction)
         {
             var current = CurrentParent;
-            AddActionElement(ref current, renderAction);
+            Draw(ref current, renderAction);
         }
 
         /// <summary>
-        /// Adds a custom render action to an element.
+        /// Adds a custom render action to an element. Draws before children.
         /// </summary>
-        public void AddActionElement(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
+        public void Draw(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
         {
-            ArgumentNullException.ThrowIfNull(handle);
-            ArgumentNullException.ThrowIfNull(renderAction);
+            if (renderAction == null)
+                throw new ArgumentException(nameof(renderAction));
 
-            handle.Data._renderCommands ??= new();
+            handle.Data._renderCommands ??= new List<ElementRenderCommand>();
             handle.Data._renderCommands.Add(new ElementRenderCommand {
+                Element = handle,
+                RenderAction = renderAction,
+            });
+        }
+
+        /// <summary>
+        /// Adds a foreground render action to the current parent. Draws after children.
+        /// </summary>
+        public void DrawForeground(Action<Canvas, Rect> renderAction)
+        {
+            var current = CurrentParent;
+            DrawForeground(ref current, renderAction);
+        }
+
+        /// <summary>
+        /// Adds a custom render action that draws after all children have been rendered.
+        /// Useful for overlays, borders, and decorations that should appear on top of content.
+        /// </summary>
+        public void DrawForeground(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
+        {
+            if (renderAction == null)
+                throw new ArgumentException(nameof(renderAction));
+
+            handle.Data._foregroundRenderCommands ??= new List<ElementRenderCommand>();
+            handle.Data._foregroundRenderCommands.Add(new ElementRenderCommand {
                 Element = handle,
                 RenderAction = renderAction,
             });
@@ -640,9 +660,17 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Pushes an ID onto the ID stack to create a new scope.
         /// </summary>
-        public void PushID(ulong id)
+        public void PushID(string id)
         {
-            _IDStack.Push(id);
+            PushID(id.GetHashCode());
+        }
+
+        /// <summary>
+        /// Pushes an ID onto the ID stack to create a new scope.
+        /// </summary>
+        public void PushID(int id)
+        {
+            _IDStack.Push(HashCode.Combine(id, _IDStack.Peek()));
         }
 
         /// <summary>
@@ -689,7 +717,7 @@ namespace Prowl.PaperUI
         public void SetElementStorage<T>(ElementHandle el, string key, T value)
         {
             if (!_storage.TryGetValue(el.Data.ID, out var storage))
-                _storage[el.Data.ID] = storage = [];
+                _storage[el.Data.ID] = storage = new Hashtable();
 
             storage[key] = value;
         }
@@ -714,17 +742,17 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Creates a stretch unit value with the specified factor.
         /// </summary>
-        public UnitValue Stretch(double factor = 1f) => UnitValue.Stretch(factor);
+        public UnitValue Stretch(float factor = 1f) => UnitValue.Stretch(factor);
 
         /// <summary>
         /// Creates a pixel-based unit value.
         /// </summary>
-        public UnitValue Pixels(double value) => UnitValue.Pixels(value);
+        public UnitValue Pixels(float value) => UnitValue.Pixels(value);
 
         /// <summary>
         /// Creates a percentage-based unit value with optional pixel offset.
         /// </summary>
-        public UnitValue Percent(double value, double pixelOffset = 0f) => UnitValue.Percentage(value, pixelOffset);
+        public UnitValue Percent(float value, float pixelOffset = 0f) => UnitValue.Percentage(value, pixelOffset);
 
         /// <summary>
         /// Creates an auto-sized unit value.

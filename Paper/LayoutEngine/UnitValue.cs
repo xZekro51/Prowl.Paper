@@ -1,4 +1,6 @@
-﻿using Prowl.PaperUI;
+﻿using System;
+using Prowl.PaperUI;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
@@ -15,10 +17,10 @@ namespace Prowl.PaperUI.LayoutEngine
         private class LerpData
         {
             public readonly UnitValue Start;
-            public readonly UnitValue End; 
-            public readonly double Progress;
+            public readonly UnitValue End;
+            public readonly float Progress;
 
-            public LerpData(UnitValue start, UnitValue end, double progress)
+            public LerpData(UnitValue start, UnitValue end, float progress)
             {
                 Start = start;
                 End = end;
@@ -27,21 +29,16 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
         /// <summary>The unit type of this value</summary>
-        public Units Type { get; set; } = Units.Auto;
+        public Units Type { get; set; }
 
         /// <summary>The numeric value in the specified units</summary>
-        public double Value { get; set; } = 0f;
+        public float Value { get; set; }
 
         /// <summary>Additional pixel offset when using percentage units</summary>
-        public double PercentPixelOffset { get; set; } = 0f;
+        public float PercentPixelOffset { get; set; }
 
         /// <summary>Data for interpolation between two UnitValues (null when not interpolating)</summary>
-        private LerpData? _lerpData = null;
-
-        /// <summary>
-        /// Creates a default UnitValue with Auto units.
-        /// </summary>
-        public UnitValue() { }
+        private LerpData? _lerpData;
 
         /// <summary>
         /// Creates a UnitValue with the specified type and value.
@@ -49,11 +46,13 @@ namespace Prowl.PaperUI.LayoutEngine
         /// <param name="type">The unit type</param>
         /// <param name="value">The numeric value</param>
         /// <param name="offset">Additional pixel offset for percentage units</param>
-        public UnitValue(Units type, double value = 0f, double offset = 0f)
+        public UnitValue(Units type, float value = 0f, float offset = 0f)
         {
             Type = type;
             Value = value;
             PercentPixelOffset = offset;
+            
+            _lerpData = null;
         }
 
         #region Factory Methods
@@ -67,20 +66,20 @@ namespace Prowl.PaperUI.LayoutEngine
         /// Creates a Stretch unit value with the specified factor.
         /// </summary>
         /// <param name="factor">Stretch factor (relative to other stretch elements)</param>
-        public static UnitValue Stretch(double factor = 1f) => new UnitValue(Units.Stretch, factor);
+        public static UnitValue Stretch(float factor = 1f) => new UnitValue(Units.Stretch, factor);
 
         /// <summary>
         /// Creates a Pixel unit value.
         /// </summary>
         /// <param name="value">Size in pixels</param>
-        public static UnitValue Pixels(double value) => new UnitValue(Units.Pixels, value);
+        public static UnitValue Pixels(float value) => new UnitValue(Units.Pixels, value);
 
         /// <summary>
         /// Creates a Percentage unit value.
         /// </summary>
         /// <param name="value">Percentage value (0-100)</param>
         /// <param name="offset">Additional pixel offset</param>
-        public static UnitValue Percentage(double value, double offset = 0f) => new UnitValue(Units.Percentage, value, offset);
+        public static UnitValue Percentage(float value, float offset = 0f) => new UnitValue(Units.Percentage, value, offset);
 
         #endregion
 
@@ -106,7 +105,7 @@ namespace Prowl.PaperUI.LayoutEngine
         /// <param name="parentValue">The parent element's size in pixels</param>
         /// <param name="defaultValue">Default value to use for Auto and Stretch units</param>
         /// <returns>Size in pixels</returns>
-        public readonly double ToPx(double parentValue, double defaultValue)
+        public readonly float ToPx(float parentValue, float defaultValue)
         {
             // Handle interpolation if active
             if (_lerpData != null)
@@ -132,13 +131,13 @@ namespace Prowl.PaperUI.LayoutEngine
         /// <param name="min">Minimum allowed value</param>
         /// <param name="max">Maximum allowed value</param>
         /// <returns>Size in pixels, clamped between min and max</returns>
-        public readonly double ToPxClamped(double parentValue, double defaultValue, in UnitValue min, in UnitValue max)
+        public readonly float ToPxClamped(float parentValue, float defaultValue, in UnitValue min, in UnitValue max)
         {
-            double minValue = min.ToPx(parentValue, double.MinValue);
-            double maxValue = max.ToPx(parentValue, double.MaxValue);
-            double value = ToPx(parentValue, defaultValue);
+            float minValue = min.ToPx(parentValue, float.MinValue);
+            float maxValue = max.ToPx(parentValue, float.MaxValue);
+            float value = ToPx(parentValue, defaultValue);
 
-            return Math.Min(maxValue, Math.Max(minValue, value));
+            return Maths.Min(maxValue, Maths.Max(minValue, value));
         }
 
         /// <summary>
@@ -149,10 +148,10 @@ namespace Prowl.PaperUI.LayoutEngine
         /// <param name="b">Ending value</param>
         /// <param name="blendFactor">Interpolation factor (0.0 to 1.0)</param>
         /// <returns>Interpolated UnitValue</returns>
-        public static UnitValue Lerp(in UnitValue a, in UnitValue b, double blendFactor)
+        public static UnitValue Lerp(in UnitValue a, in UnitValue b, float blendFactor)
         {
             // Ensure blend factor is between 0 and 1
-            blendFactor = Math.Clamp(blendFactor, 0f, 1f);
+            blendFactor = Maths.Clamp(blendFactor, 0f, 1f);
 
             // If units are the same, we can blend directly
             if (a.Type == b.Type)
@@ -196,9 +195,9 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
         /// <summary>
-        /// Implicitly converts a double to a pixel UnitValue.
+        /// Implicitly converts a float to a pixel UnitValue.
         /// </summary>
-        public static implicit operator UnitValue(double value)
+        public static implicit operator UnitValue(float value)
         {
             return new UnitValue(Units.Pixels, value);
         }

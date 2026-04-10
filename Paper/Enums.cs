@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using System;
+using System.Drawing;
 
 namespace Prowl.PaperUI
 {
@@ -40,14 +41,9 @@ namespace Prowl.PaperUI
     public enum Units
     {
         /// <summary>
-        /// Fixed pixel measurements.
+        /// Size is determined automatically based on content or other constraints.
         /// </summary>
-        Pixels,
-
-        /// <summary>
-        /// Percentage of parent container's corresponding dimension.
-        /// </summary>
-        Percentage,
+        Auto = 0,
 
         /// <summary>
         /// Flexible sizing that distributes available space based on stretch factors.
@@ -55,9 +51,14 @@ namespace Prowl.PaperUI
         Stretch,
 
         /// <summary>
-        /// Size is determined automatically based on content or other constraints.
+        /// Percentage of parent container's corresponding dimension.
         /// </summary>
-        Auto
+        Percentage,
+
+        /// <summary>
+        /// Fixed pixel measurements.
+        /// </summary>
+        Pixels,
     }
 
     public enum TextAlignment
@@ -177,31 +178,6 @@ namespace Prowl.PaperUI
     //}
 
 
-    /// <summary>
-    /// Defines scroll options for elements.
-    /// </summary>
-    [Flags]
-    public enum Scroll
-    {
-        /// <summary>No scrolling enabled.</summary>
-        None = 0,
-
-        /// <summary>Enables horizontal scrolling.</summary>
-        ScrollX = 1 << 0,
-
-        /// <summary>Enables vertical scrolling.</summary>
-        ScrollY = 1 << 1,
-
-        /// <summary>Enables both horizontal and vertical scrolling.</summary>
-        ScrollXY = ScrollX | ScrollY,
-
-        /// <summary>Auto-hides scrollbars when not needed.</summary>
-        AutoHide = 1 << 2,
-
-        /// <summary>Completely hides scrollbars but still allows scrolling.</summary>
-        Hidden = 1 << 3
-    }
-
     public enum GradientType
     {
         None = 0,
@@ -223,5 +199,20 @@ namespace Prowl.PaperUI
 
         /// <summary>Topmost layer rendered last.</summary>
         Topmost = 2
+    }
+
+    /// <summary>
+    /// Controls how an image is scaled to fit its element rect.
+    /// </summary>
+    public enum ImageScaleMode
+    {
+        /// <summary>Stretches the image to fill the entire rect, ignoring aspect ratio.</summary>
+        Stretch,
+
+        /// <summary>Scales uniformly to fit inside the rect, preserving aspect ratio. May leave empty space.</summary>
+        Fit,
+
+        /// <summary>Scales uniformly to cover the entire rect, preserving aspect ratio. May crop.</summary>
+        Fill
     }
 }

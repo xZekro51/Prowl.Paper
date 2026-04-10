@@ -26,7 +26,7 @@ namespace OpenTKSample
         {
             base.OnLoad();
             _renderer = new PaperRenderer();
-            _renderer.Initialize(ClientRectangle.Size.X, ClientRectangle.Size.Y);
+            _renderer.Initialize(FramebufferSize.X, FramebufferSize.Y);
             P = new Paper(_renderer, ClientRectangle.Size.X, ClientRectangle.Size.Y, new Prowl.Quill.FontAtlasSettings());
             Shared.PaperDemo.Initialize(P);
         }
@@ -38,7 +38,8 @@ namespace OpenTKSample
             GL.ClearColor(0.3f, 0.3f, 0.32f, 1.0f);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit | ClearBufferMask.StencilBufferBit);
 
-            P.BeginFrame((float)args.Time);
+            float dpiScale = (float)FramebufferSize.X / ClientSize.X;
+            P.BeginFrame((float)args.Time, dpiScale);
 
 
             using (Paper.Box("MainBox")
@@ -69,10 +70,10 @@ namespace OpenTKSample
         {
             base.OnResize(e);
 
-            GL.Viewport(0, 0, ClientRectangle.Size.X, ClientRectangle.Size.Y);
+            GL.Viewport(0, 0, FramebufferSize.X, FramebufferSize.Y);
 
             P.SetResolution(ClientRectangle.Size.X, ClientRectangle.Size.Y);
-            _renderer.UpdateProjection(ClientRectangle.Size.X, ClientRectangle.Size.Y);
+            _renderer.UpdateProjection(FramebufferSize.X, FramebufferSize.Y);
         }
 
         protected override void OnMouseDown(MouseButtonEventArgs e)

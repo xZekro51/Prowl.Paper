@@ -1,4 +1,7 @@
-﻿using Prowl.Vector;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Prowl.Vector;
 
 namespace Prowl.PaperUI
 {
@@ -10,11 +13,11 @@ namespace Prowl.PaperUI
         public bool WantsCaptureKeyboard { get; private set; }
 
         // Enums
-        public readonly PaperKey[] KeyValues = Enum.GetValues<PaperKey>();
-        public readonly PaperMouseBtn[] MouseValues = Enum.GetValues<PaperMouseBtn>();
+        public readonly PaperKey[] KeyValues = Enum.GetValues(typeof(PaperKey)).Cast<PaperKey>().ToArray();
+        public readonly PaperMouseBtn[] MouseValues = Enum.GetValues(typeof(PaperMouseBtn)).Cast<PaperMouseBtn>().ToArray();
 
         // Events
-        public event Action<Vector2> OnPointerPosSet;
+        public event Action<Float2> OnPointerPosSet;
         public event Action<bool> OnCursorVisibilitySet;
 
         #region Keyboard State
@@ -22,18 +25,18 @@ namespace Prowl.PaperUI
         // Keyboard state tracking
         private bool[] _keyCurState;
         private bool[] _keyPrevState;
-        private double[] _keyPressedTime;
+        private float[] _keyPressedTime;
         public PaperKey LastKeyPressed { get; private set; } = PaperKey.Unknown;
 
         #region Auto-Repeat Settings
 
         // Auto-repeat configuration
         private bool _keyAutoRepeatEnabled = true;
-        private double _autoRepeatDelay = 0.8; // Initial delay in seconds before repeating starts
-        private double _autoRepeatRate = 0.05; // Time between repeats once started (20 repeats per second)
+        private float _autoRepeatDelay = 0.8f; // Initial delay in seconds before repeating starts
+        private float _autoRepeatRate = 0.05f; // Time between repeats once started (20 repeats per second)
 
         // Auto-repeat state tracking
-        private double[] _keyRepeatTimer;
+        private float[] _keyRepeatTimer;
         private bool[] _keyRepeating;
 
         // Public properties for configuration
@@ -43,16 +46,16 @@ namespace Prowl.PaperUI
             set => _keyAutoRepeatEnabled = value;
         }
 
-        public double AutoRepeatDelay
+        public float AutoRepeatDelay
         {
             get => _autoRepeatDelay;
-            set => _autoRepeatDelay = Math.Max(0.1, value); // Minimum safe delay
+            set => _autoRepeatDelay = Maths.Max(0.1f, value); // Minimum safe delay
         }
 
-        public double AutoRepeatRate
+        public float AutoRepeatRate
         {
             get => _autoRepeatRate;
-            set => _autoRepeatRate = Math.Max(0.01, value); // Maximum rate of 100 per second
+            set => _autoRepeatRate = Maths.Max(0.01f, value); // Maximum rate of 100 per second
         }
 
         #endregion
@@ -64,32 +67,32 @@ namespace Prowl.PaperUI
         // Mouse state tracking
         private bool[] _pointerCurState;
         private bool[] _pointerPrevState;
-        private double[] _pointerPressedTime;
-        private Vector2[] _pointerClickPos;
+        private float[] _pointerPressedTime;
+        private Float2[] _pointerClickPos;
         public PaperMouseBtn LastButtonPressed { get; private set; } = PaperMouseBtn.Unknown;
-        public Vector2 PreviousPointerPos { get; private set; } = Vector2.zero;
+        public Float2 PreviousPointerPos { get; private set; } = Float2.Zero;
 
         // Current pointer position
-        private Vector2 _pointerPos;
-        public Vector2 PointerPos {
+        private Float2 _pointerPos;
+        public Float2 PointerPos {
             get => _pointerPos;
             set {
                 _pointerPos = value;
-                OnPointerPosSet?.Invoke(_pointerPos / _frameBufferScale);
+                OnPointerPosSet?.Invoke(_pointerPos);
             }
         }
 
         // Mouse wheel
-        public double PointerWheel { get; private set; } = 0;
+        public float PointerWheel { get; private set; } = 0;
 
         // Derived properties
-        public Vector2 PointerDelta => PointerPos - PreviousPointerPos;
-        public bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
+        public Float2 PointerDelta => PointerPos - PreviousPointerPos;
+        public bool IsPointerMoving => Float2.LengthSquared(PointerDelta) > 0;
 
         // Double-click tracking
-        private double[] _pointerLastClickTime;
-        private Vector2[] _pointerLastClickPos;
-        private const double MaxDoubleClickTime = 0.25f;
+        private float[] _pointerLastClickTime;
+        private Float2[] _pointerLastClickPos;
+        private const float MaxDoubleClickTime = 0.25f;
 
         #endregion
 
@@ -103,13 +106,10 @@ namespace Prowl.PaperUI
         #region Timing & Scaling
 
         // Frame timing
-        private double _deltaTime = 0.016f; // Default to 60 FPS
-        private double _time = 0f;
-        public double DeltaTime => _deltaTime;
-        public double Time => _time;
-
-        // Scaling
-        private Vector2 _frameBufferScale = Vector2.one;
+        private float _deltaTime = 0.016f; // Default to 60 FPS
+        private float _time = 0f;
+        public float DeltaTime => _deltaTime;
+        public float Time => _time;
 
         #endregion
 
@@ -128,22 +128,22 @@ namespace Prowl.PaperUI
             // Initialize keyboard arrays
             _keyCurState = new bool[KeyValues.Length];
             _keyPrevState = new bool[KeyValues.Length];
-            _keyPressedTime = new double[KeyValues.Length];
-            _keyRepeatTimer = new double[KeyValues.Length];
+            _keyPressedTime = new float[KeyValues.Length];
+            _keyRepeatTimer = new float[KeyValues.Length];
             _keyRepeating = new bool[KeyValues.Length];
-            
+
             // Initialize keyboard arrays
             _keyCurState = new bool[KeyValues.Length];
             _keyPrevState = new bool[KeyValues.Length];
-            _keyPressedTime = new double[KeyValues.Length];
+            _keyPressedTime = new float[KeyValues.Length];
 
             // Initialize mouse arrays
             _pointerCurState = new bool[MouseValues.Length];
             _pointerPrevState = new bool[MouseValues.Length];
-            _pointerPressedTime = new double[MouseValues.Length];
-            _pointerClickPos = new Vector2[MouseValues.Length];
-            _pointerLastClickTime = new double[MouseValues.Length];
-            _pointerLastClickPos = new Vector2[MouseValues.Length];
+            _pointerPressedTime = new float[MouseValues.Length];
+            _pointerClickPos = new Float2[MouseValues.Length];
+            _pointerLastClickTime = new float[MouseValues.Length];
+            _pointerLastClickPos = new Float2[MouseValues.Length];
 
             // Initialize clipboard handler
             _clipboardHandler = null;
@@ -217,7 +217,7 @@ namespace Prowl.PaperUI
         /// Updates the timing information.
         /// </summary>
         /// <param name="deltaTime">Time elapsed since last frame</param>
-        public void SetTime(double deltaTime)
+        public void SetTime(float deltaTime)
         {
             _time += deltaTime;
             _deltaTime = deltaTime;
@@ -226,11 +226,8 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Begins the input processing for a new frame.
         /// </summary>
-        /// <param name="frameBufferScale">The framebuffer scale factor</param>
-        private void StartInputFrame(Vector2 frameBufferScale)
+        private void StartInputFrame()
         {
-            _frameBufferScale = frameBufferScale;
-
             // Update key pressed times
             for (var i = 0; i < _keyPressedTime.Length; ++i)
                 if (_keyCurState[i])
@@ -334,12 +331,12 @@ namespace Prowl.PaperUI
                 _pointerCurState[i] = false;
                 _pointerPrevState[i] = false;
                 _pointerPressedTime[i] = 0;
-                _pointerClickPos[i] = Vector2.zero;
+                _pointerClickPos[i] = Float2.Zero;
             }
 
             LastButtonPressed = PaperMouseBtn.Unknown;
             PreviousPointerPos = _pointerPos;
-            _pointerPos = Vector2.zero;
+            _pointerPos = Float2.Zero;
             PointerWheel = 0;
         }
 
@@ -375,11 +372,9 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="x">X coordinate</param>
         /// <param name="y">Y coordinate</param>
-        public void SetPointerPosition(double x, double y)
+        public void SetPointerPosition(float x, float y)
         {
-            x *= _frameBufferScale.x;
-            y *= _frameBufferScale.y;
-            _pointerPos = new Vector2(x, y);
+            _pointerPos = new Float2(x, y);
         }
 
         /// <summary>
@@ -390,23 +385,20 @@ namespace Prowl.PaperUI
         /// <param name="y">Y coordinate</param>
         /// <param name="isPointerBtnDown">Whether the button is pressed</param>
         /// <param name="isPointerMove">Whether this is a movement event</param>
-        public void SetPointerState(PaperMouseBtn btn, double x, double y, bool isPointerBtnDown, bool isPointerMove)
+        public void SetPointerState(PaperMouseBtn btn, float x, float y, bool isPointerBtnDown, bool isPointerMove)
         {
             var index = (int)btn;
             LastButtonPressed = btn;
-
-            x *= _frameBufferScale.x;
-            y *= _frameBufferScale.y;
 
             if (!isPointerMove)
             {
                 _pointerPrevState[index] = _pointerCurState[index];
                 _pointerCurState[index] = isPointerBtnDown;
-                _pointerClickPos[index] = new Vector2(x, y);
+                _pointerClickPos[index] = new Float2(x, y);
             }
             else
             {
-                _pointerPos = new Vector2(x, y);
+                _pointerPos = new Float2(x, y);
             }
         }
 
@@ -414,7 +406,7 @@ namespace Prowl.PaperUI
         /// Sets the mouse wheel value.
         /// </summary>
         /// <param name="wheel">The wheel delta</param>
-        public void SetPointerWheel(double wheel)
+        public void SetPointerWheel(float wheel)
         {
             PointerWheel = wheel;
         }
@@ -484,7 +476,7 @@ namespace Prowl.PaperUI
         /// <param name="key">The key to query.</param>
         /// <param name="holdDuration">Minimum time in seconds the key must be held.</param>
         /// <returns><c>true</c> if the key has been held for at least <paramref name="holdDuration"/> seconds.</returns>
-        public bool IsKeyHeld(PaperKey key, double holdDuration = 0.5f) => IsKeyDown(key) && _keyPressedTime[(int)key] >= holdDuration;
+        public bool IsKeyHeld(PaperKey key, float holdDuration = 0.5f) => IsKeyDown(key) && _keyPressedTime[(int)key] >= holdDuration;
 
         /// <summary>
         /// Checks if a key is auto-repeating this frame.
@@ -534,30 +526,30 @@ namespace Prowl.PaperUI
         /// <param name="btn">The mouse button to query.</param>
         /// <param name="holdDuration">Minimum time in seconds the button must be held.</param>
         /// <returns><c>true</c> if the button has been held for at least <paramref name="holdDuration"/> seconds.</returns>
-        public bool IsPointerHeld(PaperMouseBtn btn, double holdDuration = 0.5f) => IsPointerDown(btn) && _pointerPressedTime[(int)btn] >= holdDuration;
+        public bool IsPointerHeld(PaperMouseBtn btn, float holdDuration = 0.5f) => IsPointerDown(btn) && _pointerPressedTime[(int)btn] >= holdDuration;
 
         /// <summary>
-        /// Checks if a mouse button was double-clicked.
+        /// Checks if a mouse button was float-clicked.
         /// </summary>
         /// <param name="btn">The mouse button to query.</param>
         public bool IsPointerDoubleClick(PaperMouseBtn btn) =>
             IsPointerPressed(btn) && _time < _pointerLastClickTime[(int)btn] &&
-            (PointerPos - _pointerLastClickPos[(int)btn]).sqrMagnitude < 2; // 5^2 = 25
+            Float2.LengthSquared(PointerPos - _pointerLastClickPos[(int)btn]) < 2; // 5^2 = 25
 
         /// <summary>
         /// Gets the position where a mouse button was clicked.
         /// </summary>
         /// <param name="btn">The mouse button to query.</param>
-        public Vector2 GetPointerClickPos(PaperMouseBtn btn) => _pointerClickPos[(int)btn];
+        public Float2 GetPointerClickPos(PaperMouseBtn btn) => _pointerClickPos[(int)btn];
 
         /// <summary>
         /// Checks if the pointer is over a specified rectangle.
         /// </summary>
         /// <param name="btn">The mouse button to query.</param>
-        public bool IsPointerOverRect(double x, double y, double width, double height)
+        public bool IsPointerOverRect(float x, float y, float width, float height)
         {
-            return _pointerPos.x >= x && _pointerPos.x <= x + width &&
-                   _pointerPos.y >= y && _pointerPos.y <= y + height;
+            return _pointerPos.X >= x && _pointerPos.X <= x + width &&
+                   _pointerPos.Y >= y && _pointerPos.Y <= y + height;
         }
 
         #endregion

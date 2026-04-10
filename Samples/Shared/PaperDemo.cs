@@ -1,6 +1,4 @@
-﻿using System.Drawing;
-
-using Prowl.PaperUI;
+﻿using Prowl.PaperUI;
 using Prowl.PaperUI.Themes.Origami;
 using Prowl.Vector;
 
@@ -11,17 +9,17 @@ namespace Shared
     public static partial class PaperDemo
     {
         // Track state for interactive elements
-        static double sliderValue = 0.5f;
+        static float sliderValue = 0.5f;
         static int selectedTabIndex = 0;
-        static Vector2 chartPosition = new Vector2(0, 0);
-        static double zoomLevel = 1.0f;
+        static Float2 chartPosition = new Float2(0, 0);
+        static float zoomLevel = 1.0f;
         static bool[] toggleState = { true, false, true, false, true };
 
         // Sample data for visualization
-        static double[] dataPoints = { 0.2f, 0.5f, 0.3f, 0.8f, 0.4f, 0.7f, 0.6f };
+        static float[] dataPoints = { 0.2f, 0.5f, 0.3f, 0.8f, 0.4f, 0.7f, 0.6f };
         static readonly string[] tabNames = { "Dashboard", "Analytics", "Profile", "Settings" }; //, "Windows" };
 
-        static double time = 0;
+        static float time = 0;
 
         static string searchText = "";
         // static bool searchFocused = false;
@@ -51,7 +49,7 @@ namespace Shared
                 // A stupid simple way to benchmark the performance of the UI (Adds the entire ui multiple times)
                 for (int i = 0; i < 1; i++)
                 {
-                    Gui.PushID((ulong)i);
+                    Gui.PushID(i);
                     // Top navigation bar
                     RenderTopNavBar();
 
@@ -126,8 +124,8 @@ namespace Shared
         //    //var myWindowB = ImGui.CreateWindow(
         //    //    fontMedium,
         //    //    "My OtherWindow",
-        //    //    new Vector2(100, 400),
-        //    //    new Vector2(200, 100),
+        //    //    new Float2(100, 400),
+        //    //    new Float2(200, 100),
         //    //    (window) => {
         //    //        // Window content rendering
         //    //        using (ImGui.Column("WindowInnerContent")
@@ -210,19 +208,19 @@ namespace Shared
                     int index = i;
                     bool isSelected = selectedTabIndex == index;
 
-                    using (Gui.Box($"MenuItemContainer_{i}")
+                    using (Gui.Box("MenuItemContainer", i)
                         .Style("menu-item")
                         .StyleIf(isSelected, "menu-item-selected")
                         .OnClick((rect) => selectedTabIndex = index)
                         .Clip()
                         .Enter())
                     {
-                        Gui.Box($"MenuItemIcon_{i}")
+                        Gui.Box("MenuItemIcon", i)
                             .Width(55)
                             .Height(50)
                             .Text(menuIcons[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter).FontSize(19);
 
-                        Gui.Box($"MenuItem_{i}")
+                        Gui.Box("MenuItem", i)
                             .Width(100)
                             .PositionType(PositionType.SelfDirected)
                             .Left(50 + 15)
@@ -295,9 +293,9 @@ namespace Shared
                     int index = i;
                     bool isSelected = i == selectedTabIndex;
                     Color tabColor = isSelected ? Themes.primaryColor : Themes.lightTextColor;
-                    double tabWidth = 1.0f / tabNames.Length;
+                    float tabWidth = 1.0f / tabNames.Length;
 
-                    using (Gui.Box($"Tab_{i}")
+                    using (Gui.Box("Tab", i)
                         .Width(Gui.Stretch(tabWidth))
                         .Style("tab")
                         .Text(tabNames[i], Fonts.arial).TextColor(tabColor).Alignment(TextAlignment.MiddleCenter).FontSize(26)
@@ -307,7 +305,7 @@ namespace Shared
                         // Show indicator line for selected tab
                         if (isSelected)
                         {
-                            Gui.Box($"TabIndicator_{i}")
+                            Gui.Box("TabIndicator", i)
                                 .Height(4)
                                 .BackgroundColor(Themes.primaryColor)
                                 .Rounded(2);
@@ -329,7 +327,7 @@ namespace Shared
 
                 for (int i = 0; i < 4; i++)
                 {
-                    using (Gui.Box($"StatCard_{i}")
+                    using (Gui.Box("StatCard", i)
                         .Width(Gui.Stretch(0.25f))
                         .Style("stat-card")
                         .Hovered
@@ -339,26 +337,26 @@ namespace Shared
                         .Enter())
                     {
                         // Card icon with conditional styling based on parent hover
-                        Gui.Box($"StatIcon_{i}")
+                        Gui.Box("StatIcon", i)
                             .Size(40)
-                            .BackgroundColor(Color.FromArgb(150, Themes.colorPalette[i % Themes.colorPalette.Length]))
+                            .BackgroundColor(Color32.FromArgb(150, Themes.colorPalette[i % Themes.colorPalette.Length]))
                             .Rounded(8)
                             .If(Gui.IsParentHovered)
                                 .Rounded(20)
                                 .End()
-                            .Transition(GuiProp.Rounded, 0.3, Easing.QuartOut)
+                            .Transition(GuiProp.Rounded, 0.3f, Easing.QuartOut)
                             .Margin(15, 0, 15, 0)
                             .IsNotInteractable();
 
-                        using (Gui.Column($"StatContent_{i}")
+                        using (Gui.Column("StatContent", i)
                             .Margin(10, 15, 15, 15)
                             .Enter())
                         {
-                            Gui.Box($"StatLabel_{i}")
+                            Gui.Box("StatLabel", i)
                                 .Height(Gui.Pixels(25))
                                 .Text(statNames[i], Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19);
 
-                            Gui.Box($"StatValue_{i}")
+                            Gui.Box("StatValue", i)
                                 .Text(statValues[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(32);
                         }
                     }
@@ -395,14 +393,14 @@ namespace Shared
                             string[] periods = { "Day", "Week", "Month", "Year" };
                             foreach (var period in periods)
                             {
-                                using (Gui.Box($"Period_{period}")
+                                using (Gui.Box("Period", period.GetHashCode())
                                     .Width(60)
                                     .Height(30)
                                     .Rounded(8)
                                     .Margin(5, 5, 0, 0)
-                                    .BackgroundColor(period == "Week" ? Themes.primaryColor : Color.FromArgb(50, 0, 0, 0))
+                                    .BackgroundColor(period == "Week" ? Themes.primaryColor : Color32.FromArgb(50, 0, 0, 0))
                                     .Hovered
-                                        .BackgroundColor(Color.FromArgb(50, Themes.primaryColor))
+                                        .BackgroundColor(Color32.FromArgb(50, Themes.primaryColor))
                                         .End()
                                     .Transition(GuiProp.BackgroundColor, 0.2f)
                                     .Text(period, Fonts.arial).TextColor(period == "Week" ? Color.White : Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
@@ -416,25 +414,25 @@ namespace Shared
                     using (Gui.Box("Chart")
                         .Margin(20)
                         .OnDragging((e) => chartPosition += e.Delta)
-                        .OnScroll((e) => zoomLevel = Math.Clamp(zoomLevel + e.Delta * 0.1f, 0.5f, 2.0f))
+                        .OnScroll((e) => zoomLevel = Maths.Clamp(zoomLevel + e.Delta * 0.1f, 0.5f, 2.0f))
                         .Clip()
                         .Enter())
                     {
                         using (Gui.Box("ChartCanvas")
-                            .Translate(chartPosition.x, chartPosition.y)
+                            .Translate(chartPosition.X, chartPosition.Y)
                             .Scale(zoomLevel)
                             .Enter())
                         {
                             // Draw a simple chart with animated data
-                            Gui.AddActionElement((vg, rect) => {
+                            Gui.Draw((vg, rect) => {
 
                                 // Draw grid lines
                                 for (int i = 0; i <= 5; i++)
                                 {
-                                    double y = rect.y + (rect.height / 5) * i;
+                                    float y = rect.Min.Y + (rect.Size.Y / 5) * i;
                                     vg.BeginPath();
-                                    vg.MoveTo(rect.x, y);
-                                    vg.LineTo(rect.x + rect.width, y);
+                                    vg.MoveTo(rect.Min.X, y);
+                                    vg.LineTo(rect.Min.X + rect.Size.X, y);
                                     vg.SetStrokeColor(Themes.lightTextColor);
                                     vg.SetStrokeWidth(1);
                                     vg.Stroke();
@@ -442,20 +440,20 @@ namespace Shared
 
                                 // Draw animated data points
                                 vg.BeginPath();
-                                double pointSpacing = rect.width / (dataPoints.Length - 1);
-                                double animatedValue;
+                                float pointSpacing = rect.Size.X / (dataPoints.Length - 1);
+                                float animatedValue;
 
                                 // Draw fill
-                                vg.MoveTo(rect.x, rect.y + rect.height);
+                                vg.MoveTo(rect.Min.X, rect.Min.Y + rect.Size.Y);
 
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
-                                    animatedValue = dataPoints[i] + Math.Sin(time * 0.25f + i * 0.5f) * 0.1f;
-                                    //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
-                                    animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
+                                    animatedValue = dataPoints[i] + Maths.Sin(time * 0.25f + i * 0.5f) * 0.1f;
+                                    //animatedValue = Maths.Clamp(animatedValue, 0.1f, 0.9f);
+                                    animatedValue = Maths.Min(Maths.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    double x = rect.x + i * pointSpacing;
-                                    double y = rect.y + rect.height - (animatedValue * rect.height);
+                                    float x = rect.Min.X + i * pointSpacing;
+                                    float y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
 
                                     if (i == 0)
                                         vg.MoveTo(x, y);
@@ -464,18 +462,18 @@ namespace Shared
                                 }
 
                                 // Complete the fill path
-                                vg.LineTo(rect.x + rect.width, rect.y + rect.height);
-                                vg.LineTo(rect.x, rect.y + rect.height);
+                                vg.LineTo(rect.Min.X + rect.Size.X, rect.Min.Y + rect.Size.Y);
+                                vg.LineTo(rect.Min.X, rect.Min.Y + rect.Size.Y);
 
                                 // Fill with gradient
                                 //var paint = vg.LinearGradient(
-                                //    rect.x, rect.y,
-                                //    rect.x, rect.y + rect.height,
-                                //    Color.FromArgb(100, primaryColor),
-                                //    Color.FromArgb(10, primaryColor));
+                                //    rect.Min.X, rect.Min.Y,
+                                //    rect.Min.X, rect.Min.Y + rect.Size.Y,
+                                //    Color32.FromArgb(100, primaryColor),
+                                //    Color32.FromArgb(10, primaryColor));
                                 //vg.SetFillPaint(paint);
                                 vg.SaveState();
-                                vg.SetLinearBrush(rect.x, rect.y, rect.x, rect.y + rect.height, Color.FromArgb(100, Themes.primaryColor), Color.FromArgb(10, Themes.primaryColor));
+                                vg.SetLinearBrush(rect.Min.X, rect.Min.Y, rect.Min.X, rect.Min.Y + rect.Size.Y, Color32.FromArgb(100, Themes.primaryColor), Color32.FromArgb(10, Themes.primaryColor));
                                 vg.FillComplex();
                                 vg.RestoreState();
 
@@ -485,12 +483,12 @@ namespace Shared
                                 vg.BeginPath();
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
-                                    animatedValue = dataPoints[i] + Math.Sin(time * 0.25f + i * 0.5f) * 0.1f;
-                                    //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
-                                    animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
+                                    animatedValue = dataPoints[i] + Maths.Sin(time * 0.25f + i * 0.5f) * 0.1f;
+                                    //animatedValue = Maths.Clamp(animatedValue, 0.1f, 0.9f);
+                                    animatedValue = Maths.Min(Maths.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    double x = rect.x + i * pointSpacing;
-                                    double y = rect.y + rect.height - (animatedValue * rect.height);
+                                    float x = rect.Min.X + i * pointSpacing;
+                                    float y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
 
                                     if (i == 0)
                                         vg.MoveTo(x, y);
@@ -505,12 +503,12 @@ namespace Shared
                                 // Draw points
                                 for (int i = 0; i < dataPoints.Length; i++)
                                 {
-                                    animatedValue = dataPoints[i] + Math.Sin(time * 0.25f + i * 0.5f) * 0.1f;
-                                    //animatedValue = Math.Clamp(animatedValue, 0.1f, 0.9f);
-                                    animatedValue = Math.Min(Math.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
+                                    animatedValue = dataPoints[i] + Maths.Sin(time * 0.25f + i * 0.5f) * 0.1f;
+                                    //animatedValue = Maths.Clamp(animatedValue, 0.1f, 0.9f);
+                                    animatedValue = Maths.Min(Maths.Max(animatedValue, 0.1f), 0.9f); // Clamp to [0.1, 0.9]
 
-                                    double x = rect.x + i * pointSpacing;
-                                    double y = rect.y + rect.height - (animatedValue * rect.height);
+                                    float x = rect.Min.X + i * pointSpacing;
+                                    float y = rect.Min.Y + rect.Size.Y - (animatedValue * rect.Size.Y);
 
                                     vg.BeginPath();
                                     vg.Circle(x, y, 6);
@@ -564,33 +562,33 @@ namespace Shared
 
                         for (int i = 0; i < activities.Length; i++)
                         {
-                            using (Gui.Row($"Activity_{i}")
+                            using (Gui.Row("Activity", i)
                                 .Height(70)
                                 .Margin(15, 15, i == 0 ? 5 : 0, 5)
                                 .Enter())
                             {
                                 // Activity icon
-                                using (Gui.Box($"ActivityIcon_{i}")
+                                using (Gui.Box("ActivityIcon", i)
                                     .Width(40)
                                     .Height(40)
                                     .Rounded(8)
                                     .Margin(0, 0, 15, 0)
-                                    .BackgroundColor(Color.FromArgb(150, Themes.colorPalette[i % Themes.colorPalette.Length]))
-                                    //.Style(BoxStyle.SolidRounded(Color.FromArgb(150, colorPalette[i % colorPalette.Length]), 20f))
+                                    .BackgroundColor(Color32.FromArgb(150, Themes.colorPalette[i % Themes.colorPalette.Length]))
+                                    //.Style(BoxStyle.SolidRounded(Color32.FromArgb(150, colorPalette[i % colorPalette.Length]), 20f))
                                     .Enter()) { }
 
                                 // Activity content
-                                using (Gui.Column($"ActivityContent_{i}")
+                                using (Gui.Column("ActivityContent", i)
                                     .Margin(10, 0, 0, 0)
                                     .Enter())
                                 {
-                                    using (Gui.Box($"ActivityText_{i}")
+                                    using (Gui.Box("ActivityText", i)
                                         .Height(Gui.Pixels(20))
                                         .Margin(0, 0, 15, 0)
                                         .Text(activities[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                         .Enter()) { }
 
-                                    using (Gui.Box($"ActivityTime_{i}")
+                                    using (Gui.Box("ActivityTime", i)
                                         .Height(Gui.Pixels(20))
                                         .Text(timestamps[i], Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                         .Enter()) { }
@@ -600,7 +598,7 @@ namespace Shared
                             // Add separator except for the last item
                             if (i < activities.Length - 1)
                             {
-                                Gui.Box($"Separator_{i}").Style("seperator");
+                                Gui.Box("Separator", i).Style("seperator");
                             }
                         }
                     }
@@ -641,7 +639,7 @@ namespace Shared
                         Slider.Primary("SliderTrack", sliderValue, newValue => sliderValue = newValue);
                     }
 
-                    double[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
+                    float[] values = { sliderValue, 0.2f, 0.15f, 0.25f, 0.1f };
                     PieChart.Primary("PieChart", values, 0);
                 }
 
@@ -652,36 +650,31 @@ namespace Shared
                     .Enter())
                 {
                     // Dynamic content amount based on time
-                    int amount = (int)(Math.Abs(Math.Sin(time * 0.25)) * 25) + 10;
+                    int amount = (int)(Maths.Abs(Maths.Sin(time * 0.25)) * 25) + 10;
 
                     // Create a grid layout for items
                     using (Gui.Row("GridContainer")
                         .Enter())
                     {
-                        // Left column - cards
-                        using (Gui.Column("LeftColumn")
-                            .Width(Gui.Stretch(0.6))
-                            .SetScroll(Scroll.ScrollY)
-                            .Enter())
+                        // Left column - cards (using ScrollView)
+                        using (ScrollView.Begin(Gui, "LeftColumn", 500, 500, paddingTop: 4, rowSpacing: 2))
                         {
-                            double scrollState = Gui.GetElementStorage<ScrollState>(Gui.CurrentParent, "ScrollState", new ScrollState()).Position.y;
-
                             for (int i = 0; i < 10; i++)
                             {
                                 // Calculate animations based on time and index
-                                double hue = (i * 25 + time * 20) % 360;
-                                double saturation = 0.7;
-                                double value = 0.8;
+                                float hue = (i * 25 + time * 20) % 360;
+                                float saturation = 0.7f;
+                                float value = 0.8f;
 
                                 // Convert HSV to RGB
-                                double h = hue / 60;
-                                int hi = (int)Math.Floor(h) % 6;
-                                double f = h - Math.Floor(h);
-                                double p = value * (1 - saturation);
-                                double q = value * (1 - f * saturation);
-                                double t = value * (1 - (1 - f) * saturation);
+                                float h = hue / 60;
+                                int hi = (int)Maths.Floor(h) % 6;
+                                float f = h - Maths.Floor(h);
+                                float p = value * (1 - saturation);
+                                float q = value * (1 - f * saturation);
+                                float t = value * (1 - (1 - f) * saturation);
 
-                                double r, g, b;
+                                float r, g, b;
 
                                 switch (hi)
                                 {
@@ -694,7 +687,7 @@ namespace Shared
                                 }
 
                                 // Convert to Color
-                                Color itemColor = Color.FromArgb(255,
+                                Color itemColor = Color32.FromArgb(255,
                                     (int)(r * 255),
                                     (int)(g * 255),
                                     (int)(b * 255));
@@ -702,11 +695,11 @@ namespace Shared
                                 // Custom icon for each card
                                 string icon = Icons.GetRandomIcon(i);
 
-                                using (Gui.Box($"Card_{i}")
+                                using (Gui.Box("Card", i)
                                     .Height(70)
                                     .Margin(10, 10, 5, 5)
-                                    .BackgroundColor(Color.FromArgb(230, itemColor))
-                                    .BorderColor(Themes.isDark ? Color.FromArgb(50, 255, 255, 255) : Color.FromArgb(50, 0, 0, 0))
+                                    .BackgroundColor(Color32.FromArgb(230, itemColor))
+                                    .BorderColor(Themes.isDark ? Color32.FromArgb(50, 255, 255, 255) : Color32.FromArgb(50, 0, 0, 0))
                                     .BorderWidth(1)
                                     .Rounded(12)
                                     .Enter())
@@ -716,26 +709,26 @@ namespace Shared
                                         .Enter())
                                     {
                                         // Icon
-                                        using (Gui.Box($"CardIcon_{i}")
+                                        using (Gui.Box("CardIcon", i)
                                             .Width(50)
                                             .Height(50)
                                             .Rounded(25)
-                                            .BackgroundColor(Color.FromArgb(60, 255, 255, 255))
+                                            .BackgroundColor(Color32.FromArgb(60, 255, 255, 255))
                                             .Text(icon, Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleCenter).FontSize(26)
                                             .Enter()) { }
 
                                         // Content
-                                        using (Gui.Column($"CardTextColumn_{i}")
+                                        using (Gui.Column("CardTextColumn", i)
                                             .Margin(10, 0, 0, 0)
                                             .Enter())
                                         {
-                                            using (Gui.Box($"CardTitle_{i}")
+                                            using (Gui.Box("CardTitle", i)
                                                 .Height(25)
                                                 .Text($"Item {i}", Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26)
                                                 .Enter()) { }
 
-                                            using (Gui.Box($"CardDescription_{i}")
-                                                .Text("Interactive card with animations", Fonts.arial).TextColor(Color.FromArgb(200, Themes.textColor)).Alignment(TextAlignment.MiddleLeft).FontSize(19)
+                                            using (Gui.Box("CardDescription", i)
+                                                .Text("Interactive card with animations", Fonts.arial).TextColor(Color32.FromArgb(200, Themes.textColor)).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                                 .Enter()) { }
                                         }
                                     }
@@ -813,16 +806,16 @@ namespace Shared
 
                         for (int i = 0; i < statLabels.Length; i++)
                         {
-                            using (Gui.Column($"Stat_{i}")
+                            using (Gui.Column("Stat", i)
                                 .Width(Gui.Stretch(1.0f / statLabels.Length))
                                 .Enter())
                             {
-                                using (Gui.Box($"StatValue_{i}")
+                                using (Gui.Box("StatValue", i)
                                     .Height(40)
                                     .Text(statValues[i], Fonts.arial).TextColor(Themes.primaryColor).Alignment(TextAlignment.MiddleCenter).FontSize(32)
                                     .Enter()) { }
 
-                                using (Gui.Box($"StatLabel_{i}")
+                                using (Gui.Box("StatLabel", i)
                                     .Height(30)
                                     .Text(statLabels[i], Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                                     .Enter()) { }
@@ -840,16 +833,16 @@ namespace Shared
 
                         for (int i = 0; i < contactLabels.Length; i++)
                         {
-                            using (Gui.Row($"ContactRow_{i}")
+                            using (Gui.Row("ContactRow", i)
                                 .Height(50)
                                 .Enter())
                             {
-                                using (Gui.Box($"ContactLabel_{i}")
+                                using (Gui.Box("ContactLabel", i)
                                     .Width(100)
                                     .Text(contactLabels[i] + ":", Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                     .Enter()) { }
 
-                                using (Gui.Box($"ContactValue_{i}")
+                                using (Gui.Box("ContactValue", i)
                                     .Text(contactValues[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                     .Enter()) { }
                             }
@@ -886,7 +879,7 @@ namespace Shared
                             string[] days = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
                             foreach (var day in days)
                             {
-                                using (Gui.Box($"Day_{day}")
+                                using (Gui.Box("Day", day.GetHashCode())
                                     .Text(day, Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                                     .Enter()) { }
                             }
@@ -898,25 +891,25 @@ namespace Shared
                             .Enter())
                         {
                             // Render contribution graph
-                            Gui.AddActionElement((vg, rect) => {
+                            Gui.Draw((vg, rect) => {
                                 int days = 7;
                                 int weeks = 4;
-                                double cellWidth = rect.width / days;
-                                double cellHeight = rect.height / weeks;
-                                double cellSize = Math.Min(cellWidth, cellHeight) * 0.8f;
-                                double cellMargin = Math.Min(cellWidth, cellHeight) * 0.1f;
+                                float cellWidth = rect.Size.X / days;
+                                float cellHeight = rect.Size.Y / weeks;
+                                float cellSize = Maths.Min(cellWidth, cellHeight) * 0.8f;
+                                float cellMargin = Maths.Min(cellWidth, cellHeight) * 0.1f;
 
                                 for (int week = 0; week < days; week++)
                                 {
                                     for (int day = 0; day < weeks; day++)
                                     {
                                         // Calculate position
-                                        double x = rect.x + week * cellWidth + cellMargin;
-                                        double y = rect.y + day * cellHeight + cellMargin;
+                                        float x = rect.Min.X + week * cellWidth + cellMargin;
+                                        float y = rect.Min.Y + day * cellHeight + cellMargin;
 
                                         // Generate intensity based on position and time
-                                        double value = Math.Sin(week * 0.4f + day * 0.7f + time) * 0.5f + 0.5f;
-                                        value = Math.Pow(value, 1.5f);
+                                        float value = Maths.Sin(week * 0.4f + day * 0.7f + time) * 0.5f + 0.5f;
+                                        value = Maths.Pow(value, 1.5f);
 
                                         // Draw cell
                                         vg.BeginPath();
@@ -924,7 +917,7 @@ namespace Shared
 
                                         // Apply color based on intensity
                                         int alpha = (int)(40 + value * 215);
-                                        vg.SetFillColor(Color.FromArgb(alpha, Themes.primaryColor));
+                                        vg.SetFillColor(Color32.FromArgb(alpha, Themes.primaryColor));
                                         vg.Fill();
                                     }
                                 }
@@ -949,7 +942,7 @@ namespace Shared
 
                         // Skill bars
                         string[] skills = { "Programming", "Design", "Communication", "Leadership", "Problem Solving" };
-                        double[] skillLevels = { 0.9f, 0.75f, 0.8f, 0.6f, 0.85f };
+                        float[] skillLevels = { 0.9f, 0.75f, 0.8f, 0.6f, 0.85f };
 
                         using (Gui.Column("SkillBars")
                             .Margin(20)
@@ -957,35 +950,35 @@ namespace Shared
                         {
                             for (int i = 0; i < skills.Length; i++)
                             {
-                                using (Gui.Column($"Skill_{i}")
+                                using (Gui.Column("Skill", i)
                                     .Height(Gui.Stretch(1.0f / skills.Length))
                                     .Margin(0, 0, i == 0 ? 0 : 10, 0)
                                     .Enter())
                                 {
                                     // Skill label
-                                    using (Gui.Box($"SkillLabel_{i}")
+                                    using (Gui.Box("SkillLabel", i)
                                         .Height(25)
                                         .Text(skills[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(19)
                                         .Enter()) { }
 
                                     // Skill bar
-                                    using (Gui.Row($"SkillBarBg_{i}")
+                                    using (Gui.Row("SkillBarBg", i)
                                         .Height(15)
-                                        .BackgroundColor(Color.FromArgb(30, 0, 0, 0))
-                                        //.Style(BoxStyle.SolidRounded(Color.FromArgb(30, 0, 0, 0), 7.5f))
+                                        .BackgroundColor(Color32.FromArgb(30, 0, 0, 0))
+                                        //.Style(BoxStyle.SolidRounded(Color32.FromArgb(30, 0, 0, 0), 7.5f))
                                         .Enter())
                                     {
                                         // Animate the skill level with time
-                                        double animatedLevel = skillLevels[i];
+                                        float animatedLevel = skillLevels[i];
 
-                                        using (Gui.Box($"SkillBarFg_{i}")
+                                        using (Gui.Box("SkillBarFg", i)
                                             .Width(Gui.Percent(animatedLevel * 100f))
                                             .BackgroundColor(Themes.colorPalette[i % Themes.colorPalette.Length])
                                             //.Style(BoxStyle.SolidRoundedWithBorder(colorPalette[i % colorPalette.Length], primaryColor, 7.5f, 2))
                                             .Enter()) { }
 
                                         // Percentage label
-                                        using (Gui.Box($"SkillPercent_{i}")
+                                        using (Gui.Box("SkillPercent", i)
                                             .Width(40)
                                             .Text($"{animatedLevel * 100:F0}%", Fonts.arial).TextColor(Themes.lightTextColor).Alignment(TextAlignment.Right).FontSize(19)
                                             .Enter()) { }
@@ -1000,7 +993,10 @@ namespace Shared
 
         private static void RenderSettingsTab()
         {
-            OrigamiExample.ShowExample(Gui, Fonts.arial);
+            using (ScrollView.Begin(Gui, "Content", 800, 600))
+            {
+                OrigamiExample.ShowExample(Gui, Fonts.arial);
+            }
 
             //TextArea.Secondary("SearchTextField", searchText, newValue => searchText = newValue, "Search...")
             //    .Margin(0, 15, 15, 0);
@@ -1027,7 +1023,7 @@ namespace Shared
                         Color itemTextColor = isSelected ? Themes.primaryColor : Themes.textColor;
                         var index = i;
 
-                        Button.Outline($"SettingsCat_{i}", $"  {categories[i]}")
+                        Button.Outline("SettingsCat", $"  {categories[i]}", i)
                             .Margin(10, 10, 5, 5)
                             // .StyleIf(isSelected, "period-button-selected")
                             .OnClick((rect) => { Console.WriteLine($"Category {categories[index]} clicked"); });
@@ -1054,24 +1050,24 @@ namespace Shared
 
                     for (int i = 0; i < options.Length; i++)
                     {
-                        using (Gui.Row($"Setting_{i}")
+                        using (Gui.Row("Setting", i)
                             .Height(60)
                             .Margin(20, 20, i == 0 ? 0 : 5, 5)
                             .Enter())
                         {
                             // Option label
-                            Gui.Box($"SettingLabel_{i}")
+                            Gui.Box("SettingLabel", i)
                                 .Text(options[i], Fonts.arial).TextColor(Themes.textColor).Alignment(TextAlignment.MiddleLeft).FontSize(26);
 
                             bool isOn = toggleState[i];
                             int index = i;
-                            Switch.Primary($"Switch{index}", toggleState[index]).OnClick((_) => toggleState[index] = !toggleState[index]);
+                            Switch.Primary("Switch", toggleState[index], index).OnClick((_) => toggleState[index] = !toggleState[index]);
                         }
 
                         // Add separator except for the last item
                         if (i < options.Length - 1)
                         {
-                            Gui.Box($"Separator_{i}").Style("separator");
+                            Gui.Box("Separator", i).Style("separator");
                         }
                     }
 
@@ -1144,7 +1140,7 @@ namespace Shared
                 {
                     foreach (var link in links)
                     {
-                        using (Gui.Box($"Link_{link}")
+                        using (Gui.Box("Link", link.GetHashCode())
                             .Width(Gui.Stretch(1f / links.Length))
                             .Text(link, Fonts.arial).TextColor(Themes.primaryColor).Alignment(TextAlignment.MiddleCenter).FontSize(19)
                             .OnClick((rect) => Console.WriteLine($"Link {link} clicked"))
